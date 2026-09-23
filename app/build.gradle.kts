@@ -1,3 +1,4 @@
+import com.android.build.gradle.internal.api.BaseVariantOutputImpl
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 
 plugins {
@@ -39,6 +40,29 @@ android {
     }
 
     packaging.resources.excludes += "/META-INF/{AL2.0,LGPL2.1}"
+
+    splits {
+        abi {
+            isEnable = true
+            reset()
+            include("arm64-v8a", "armeabi-v7a", "x86_64")
+            isUniversalApk = false
+        }
+    }
+}
+
+configure<com.android.build.gradle.AppExtension> {
+    applicationVariants.configureEach {
+        val appVersion = versionName
+        val buildTypeName = buildType.name
+        outputs.configureEach {
+            val output = this as BaseVariantOutputImpl
+            val abi = output.getFilter("ABI")
+            if (abi != null) {
+                output.outputFileName = "mobileschedule-v$appVersion-$abi-$buildTypeName.apk"
+            }
+        }
+    }
 }
 
 kotlin {
