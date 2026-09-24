@@ -25,4 +25,15 @@ interface CourseDao {
     @Transaction
     @Query("SELECT * FROM courses WHERE semesterId = :semesterId ORDER BY dayOfWeek, startSection, endSection, id")
     fun observeSemesterCourses(semesterId: Long): Flow<List<CourseWithWeeks>>
+
+    /** Counts each affected arrangement once, including a row with both week and section violations. */
+    @Query("""
+        SELECT COUNT(*) FROM courses AS c WHERE c.semesterId = :semesterId AND (
+            c.dayOfWeek NOT BETWEEN 1 AND 7 OR c.startSection < 1 OR
+            c.endSection < c.startSection OR c.endSection > :totalSections OR
+            NOT EXISTS (SELECT 1 FROM course_weeks AS w WHERE w.courseId = c.id) OR
+            EXISTS (SELECT 1 FROM course_weeks AS w WHERE w.courseId = c.id AND (w.week < 1 OR w.week > :totalWeeks))
+        )
+    """)
+    suspend fun countOutsideConfig(semesterId: Long, totalWeeks: Int, totalSections: Int): Int
 }

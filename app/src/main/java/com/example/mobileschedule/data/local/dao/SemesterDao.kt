@@ -24,8 +24,21 @@ interface SemesterDao {
     suspend fun getSemester(semesterId: Long): SemesterWithDetails?
 
     @Transaction
+    @Query("SELECT * FROM semesters WHERE id = :semesterId")
+    fun observeSemester(semesterId: Long): Flow<SemesterWithDetails?>
+
+    @Transaction
     @Query("SELECT * FROM semesters WHERE id = (SELECT activeSemesterId FROM app_settings WHERE id = 0)")
     fun observeActiveSemester(): Flow<SemesterWithDetails?>
+
+    @Query("UPDATE semesters SET displayName = :displayName WHERE id = :semesterId")
+    suspend fun updateDisplayName(semesterId: Long, displayName: String)
+
+    @Query("UPDATE semester_configs SET firstWeekMonday = :firstWeekMonday, totalWeeks = :totalWeeks, totalSections = :totalSections, revision = :revision WHERE semesterId = :semesterId")
+    suspend fun updateConfig(semesterId: Long, firstWeekMonday: Long, totalWeeks: Int, totalSections: Int, revision: Long)
+
+    @Query("DELETE FROM section_times WHERE semesterId = :semesterId")
+    suspend fun deleteSectionTimes(semesterId: Long)
 
     // This leaf row has no dependents; REPLACE is also supported by SQLite on API 26.
     @Query("INSERT OR REPLACE INTO app_settings (id, activeSemesterId) VALUES (0, :semesterId)")
