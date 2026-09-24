@@ -9,6 +9,10 @@ import com.example.mobileschedule.data.local.entity.toArrangement
 import com.example.mobileschedule.data.local.entity.toModel
 import com.example.mobileschedule.data.model.DataError
 import com.example.mobileschedule.data.model.DataErrorCode
+import com.example.mobileschedule.data.model.ImportRequest
+import com.example.mobileschedule.data.model.ImportPreview
+import com.example.mobileschedule.data.model.ImportConfirmation
+import com.example.mobileschedule.data.model.ImportReceipt
 import com.example.mobileschedule.data.model.RepoResult
 import com.example.mobileschedule.data.model.Semester
 import com.example.mobileschedule.data.model.SemesterConfig
@@ -27,6 +31,14 @@ import kotlinx.coroutines.flow.map
 class OfflineScheduleRepository @Inject constructor(private val database: AppDatabase) : ScheduleRepository {
     private val semesters = database.semesterDao()
     private val courses = database.courseDao()
+    private val imports = ImportCoordinator(database)
+
+    override suspend fun prepareImport(request: ImportRequest): RepoResult<ImportPreview> = imports.prepare(request)
+
+    override suspend fun commitImport(previewId: String, confirmation: ImportConfirmation): RepoResult<ImportReceipt> =
+        imports.commit(previewId, confirmation)
+
+    override suspend fun discardImport(previewId: String): RepoResult<Unit> = imports.discard(previewId)
 
     override fun observeSemesters(): Flow<RepoResult<List<Semester>>> =
         semesters.observeSemesters().map { rows -> rows.map { it.toModel() } }.asResult()

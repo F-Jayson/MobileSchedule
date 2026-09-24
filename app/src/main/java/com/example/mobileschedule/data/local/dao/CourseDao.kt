@@ -36,4 +36,20 @@ interface CourseDao {
         )
     """)
     suspend fun countOutsideConfig(semesterId: Long, totalWeeks: Int, totalSections: Int): Int
+
+    @Transaction
+    @Query("""
+        SELECT c.* FROM courses AS c JOIN import_batches AS b ON b.id = c.importBatchId
+        WHERE c.originType = 'SCHOOL_IMPORT' AND b.schoolId = :schoolId AND b.sourceId = :sourceId
+            AND b.sourceTermId = :sourceTermId ORDER BY c.id
+    """)
+    suspend fun getImportedInScope(schoolId: String, sourceId: String, sourceTermId: String): List<CourseWithWeeks>
+
+    @Query("""
+        DELETE FROM courses WHERE id IN (SELECT c.id FROM courses AS c
+            JOIN import_batches AS b ON b.id = c.importBatchId
+            WHERE c.originType = 'SCHOOL_IMPORT' AND b.schoolId = :schoolId AND b.sourceId = :sourceId
+                AND b.sourceTermId = :sourceTermId)
+    """)
+    suspend fun deleteImportedInScope(schoolId: String, sourceId: String, sourceTermId: String): Int
 }

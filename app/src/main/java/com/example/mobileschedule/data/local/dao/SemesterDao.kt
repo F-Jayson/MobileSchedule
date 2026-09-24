@@ -15,6 +15,9 @@ interface SemesterDao {
     @Insert suspend fun insertSectionTimes(times: List<SectionTimeEntity>)
     @Insert suspend fun insertSourceBinding(binding: SourceBindingEntity)
 
+    @Query("SELECT * FROM source_bindings WHERE schoolId = :schoolId AND sourceId = :sourceId AND sourceTermId = :sourceTermId")
+    suspend fun getSourceBinding(schoolId: String, sourceId: String, sourceTermId: String): SourceBindingEntity?
+
     @Transaction
     @Query("SELECT * FROM semesters ORDER BY id")
     fun observeSemesters(): Flow<List<SemesterWithDetails>>
