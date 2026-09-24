@@ -1,6 +1,7 @@
 package com.example.mobileschedule.data.local
 
 import com.example.mobileschedule.data.local.entity.CourseEntity
+import com.example.mobileschedule.data.local.entity.CourseOriginType
 import com.example.mobileschedule.data.local.entity.CourseWeekEntity
 import com.example.mobileschedule.data.local.entity.CourseWithWeeks
 import com.example.mobileschedule.data.local.entity.toModel
@@ -11,7 +12,7 @@ class CourseMappingTest {
     @Test
     fun disjointWeeksRemainDisjointDuringMapping() {
         val row = CourseWithWeeks(
-            CourseEntity(8, "软件工程", "老师", "A101", 2, 3, 4),
+            CourseEntity(8, "软件工程", "老师", "A101", 2, 3, 4, 1, CourseOriginType.LEGACY),
             listOf(CourseWeekEntity(8, 9), CourseWeekEntity(8, 1), CourseWeekEntity(8, 3)),
         )
         val course = row.toModel()

@@ -41,6 +41,8 @@ android {
 
     packaging.resources.excludes += "/META-INF/{AL2.0,LGPL2.1}"
 
+    sourceSets.getByName("androidTest").assets.srcDir("$projectDir/schemas")
+
     splits {
         abi {
             isEnable = true
@@ -97,8 +99,11 @@ dependencies {
     androidTestImplementation(platform(libs.compose.bom))
     androidTestImplementation(libs.androidx.test.junit)
     androidTestImplementation(libs.androidx.test.runner)
+    androidTestImplementation(libs.room.testing)
     androidTestImplementation(libs.espresso.core)
     androidTestImplementation(libs.compose.ui.test.junit4)
     debugImplementation(libs.compose.ui.tooling)
     debugImplementation(libs.compose.ui.test.manifest)
+    // Android tests resolve shared libraries from the app. Room's schema serializer needs 1.8.1.
+    debugImplementation(libs.kotlinx.serialization.core)
 }

@@ -1,7 +1,6 @@
 package com.example.mobileschedule.di
 
 import android.content.Context
-import androidx.room.Room
 import com.example.mobileschedule.data.local.AppDatabase
 import dagger.Module
 import dagger.Provides
@@ -16,8 +15,14 @@ object DatabaseModule {
     @Provides
     @Singleton
     fun provideDatabase(@ApplicationContext context: Context): AppDatabase =
-        Room.databaseBuilder(context, AppDatabase::class.java, "mobile_schedule.db").build()
+        AppDatabase.open(context)
 
     @Provides
     fun provideCourseDao(database: AppDatabase) = database.courseDao()
+
+    @Provides
+    fun provideSemesterDao(database: AppDatabase) = database.semesterDao()
+
+    @Provides
+    fun provideImportBatchDao(database: AppDatabase) = database.importBatchDao()
 }
