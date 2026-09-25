@@ -10,6 +10,8 @@ import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.emitAll
+import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
@@ -143,6 +145,20 @@ class ScheduleViewModelTest {
         assertEquals(CourseDetailUiState.Closed, viewModel.detailState.value)
     }
 
+    @Test fun retryResubscribesAfterReadErrorWithoutTreatingItAsEmpty() = runTest {
+        val repository = FakeScheduleRepository(semester())
+        repository.failFirstSubscription = true
+        val viewModel = ScheduleViewModel(repository)
+        viewModel.refreshToday(monday)
+        collect(viewModel)
+        runCurrent()
+        assertEquals(ScheduleUiState.Error, viewModel.uiState.value)
+        viewModel.retry()
+        runCurrent()
+        assertEquals(1, ready(viewModel).week.schedule.week)
+        assertEquals(2, repository.subscriptionCount)
+    }
+
     private fun TestScope.collect(viewModel: ScheduleViewModel) {
         backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) { viewModel.uiState.collect {} }
     }
@@ -158,7 +174,13 @@ class ScheduleViewModelTest {
         val arrangements = MutableStateFlow<List<CourseArrangement>>(emptyList())
         val detail = MutableStateFlow<RepoResult<CourseDetail?>>(RepoResult.Ok(null))
         val importStatus = MutableStateFlow<RepoResult<SemesterImportStatus>>(RepoResult.Ok(SemesterImportStatus(1, emptyList())))
-        override fun observeActiveSemester(): Flow<RepoResult<Semester?>> = activeSemester
+        var failFirstSubscription = false
+        var subscriptionCount = 0
+        override fun observeActiveSemester(): Flow<RepoResult<Semester?>> = flow {
+            subscriptionCount++
+            if (failFirstSubscription && subscriptionCount == 1) emit(RepoResult.Err(DataError(DataErrorCode.STORAGE_READ_FAILED)))
+            else emitAll(activeSemester)
+        }
         override fun observeActiveWeek(selectedWeek: Int): Flow<RepoResult<ActiveWeek?>> =
             combine(activeSemester, arrangements) { result, courses ->
                 val semester = (result as? RepoResult.Ok)?.value

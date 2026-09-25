@@ -2,7 +2,6 @@
 <resources>
     <string name="app_name">课程表</string>
     <string name="tab_schedule">课表</string>
-    <string name="tab_today">今日</string>
     <string name="tab_settings">设置</string>
     <string name="schedule_empty_title">欢迎使用课程表</string>
     <string name="schedule_empty_body">还没有活动学期。完成学期配置后，可在这里查看每周课程。</string>

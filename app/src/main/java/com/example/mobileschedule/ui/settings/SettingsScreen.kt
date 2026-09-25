@@ -2,7 +2,6 @@ package com.example.mobileschedule.ui.settings
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -28,11 +27,12 @@ import com.example.mobileschedule.R
 fun SettingsRoute(
     onCreate: () -> Unit,
     onEdit: (Long) -> Unit,
+    onImport: () -> Unit,
     viewModel: SettingsHomeViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     val error by viewModel.actionError.collectAsStateWithLifecycle()
-    SettingsHomeScreen(state, onCreate, onEdit, viewModel::activate, error)
+    SettingsHomeScreen(state, onCreate, onEdit, viewModel::activate, error, onImport)
 }
 
 @Composable
@@ -42,6 +42,7 @@ fun SettingsHomeScreen(
     onEdit: (Long) -> Unit,
     onActivate: (Long) -> Unit,
     actionError: String? = null,
+    onImport: () -> Unit = {},
 ) {
     LazyColumn(Modifier.fillMaxSize().testTag("settings_page"),
         contentPadding = androidx.compose.foundation.layout.PaddingValues(20.dp),
@@ -65,7 +66,7 @@ fun SettingsHomeScreen(
                                 Text(if (config == null) "尚未配置周次和节次" else
                                     "第1周周一 ${config.firstWeekMonday} · ${config.totalWeeks}周 · ${config.totalSections}节")
                                 Text(if (config?.sectionTimes.isNullOrEmpty()) "节次时间未配置" else "已配置每节起止时间")
-                                Row {
+                                Column {
                                     TextButton(onClick = { onEdit(semester.id) },
                                         modifier = Modifier.testTag("settings_edit_${semester.id}")) { Text("编辑配置") }
                                     if (!active) TextButton(onClick = { onActivate(semester.id) },
@@ -78,8 +79,13 @@ fun SettingsHomeScreen(
                     }
                 }
                 item {
-                    Button(onClick = onCreate, modifier = Modifier.testTag("settings_create")) {
-                        Text("新建本地学期")
+                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Button(onClick = onCreate, modifier = Modifier.testTag("settings_create")) {
+                            Text("新建本地学期")
+                        }
+                        TextButton(onClick = onImport, modifier = Modifier.testTag("settings_import")) {
+                            Text("导入课程表")
+                        }
                     }
                 }
             }

@@ -20,10 +20,10 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import com.example.mobileschedule.R
+import com.example.mobileschedule.ui.importentry.ImportIntroRoute
 import com.example.mobileschedule.ui.schedule.ScheduleRoute
 import com.example.mobileschedule.ui.settings.SettingsConfigRoute
 import com.example.mobileschedule.ui.settings.SettingsRoute
-import com.example.mobileschedule.ui.today.TodayScreen
 
 private enum class Destination(
     val route: String,
@@ -31,7 +31,6 @@ private enum class Destination(
     @param:DrawableRes val icon: Int,
 ) {
     SCHEDULE("schedule", R.string.tab_schedule, R.drawable.ic_schedule),
-    TODAY("today", R.string.tab_today, R.drawable.ic_today),
     SETTINGS("settings", R.string.tab_settings, R.drawable.ic_settings),
 }
 
@@ -41,7 +40,7 @@ fun MobileScheduleApp() {
     val entry by navController.currentBackStackEntryAsState()
     Scaffold(
         bottomBar = {
-            if (entry?.destination?.route?.startsWith("config/") != true) {
+            if (Destination.entries.any { it.route == entry?.destination?.route }) {
                 NavigationBar {
                     Destination.entries.forEach { destination ->
                         NavigationBarItem(
@@ -63,11 +62,19 @@ fun MobileScheduleApp() {
         },
     ) { padding ->
         NavHost(navController, startDestination = Destination.SCHEDULE.route, modifier = Modifier.padding(padding)) {
-            composable(Destination.SCHEDULE.route) { ScheduleRoute() }
-            composable(Destination.TODAY.route) { TodayScreen() }
+            composable(Destination.SCHEDULE.route) {
+                ScheduleRoute(onConfigure = { navController.navigate("config/new") },
+                    onSettings = { navController.navigate(Destination.SETTINGS.route) },
+                    onImport = { navController.navigate("import") })
+            }
             composable(Destination.SETTINGS.route) {
                 SettingsRoute(onCreate = { navController.navigate("config/new") },
-                    onEdit = { id -> navController.navigate("config/$id") })
+                    onEdit = { id -> navController.navigate("config/$id") },
+                    onImport = { navController.navigate("import") })
+            }
+            composable("import") {
+                ImportIntroRoute(onBack = { navController.popBackStack() },
+                    onConfigure = { id -> navController.navigate(if (id == null) "config/new" else "config/$id") })
             }
             composable("config/new") {
                 SettingsConfigRoute(null, onBack = { navController.popBackStack() })

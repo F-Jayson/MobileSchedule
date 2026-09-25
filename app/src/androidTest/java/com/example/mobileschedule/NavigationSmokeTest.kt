@@ -20,16 +20,41 @@ class NavigationSmokeTest {
     @get:Rule val compose = createAndroidComposeRule<MainActivity>()
 
     @Test
-    fun freshInstallReadsEmptyDatabaseAndCanNavigateBetweenTabs() {
-        compose.waitUntil(timeoutMillis = 10_000) {
-            compose.onAllNodesWithTag("schedule_empty").fetchSemanticsNodes().isNotEmpty()
+    fun availableTabsAndImportRoutesReturnToCaller() {
+        compose.waitUntil(timeoutMillis = 30_000) {
+            hasTag("schedule_empty") || hasTag("schedule_config_required") || hasTag("week_grid")
         }
-        compose.onNodeWithTag("schedule_empty").assertIsDisplayed()
+        val firstRun = hasTag("schedule_empty")
+        val initialTag = when {
+            firstRun -> "schedule_empty"
+            hasTag("schedule_config_required") -> "schedule_config_required"
+            else -> "week_grid"
+        }
+        compose.onNodeWithTag(initialTag).assertIsDisplayed()
         compose.onNodeWithTag("tab_schedule").assertIsSelected()
-        compose.onNodeWithTag("tab_today").performClick()
-        compose.onNodeWithTag("today_page").assertIsDisplayed()
-        compose.onNodeWithTag("tab_today").assertIsSelected()
+        compose.onNodeWithTag("tab_today").assertDoesNotExist()
+        if (firstRun) saveScreenshot("schedule-first-run.png")
+        compose.onNodeWithTag(if (initialTag == "week_grid") "schedule_import_top" else "schedule_import")
+            .performClick()
+        compose.onNodeWithTag("import_intro").assertIsDisplayed()
+        compose.onNodeWithTag("import_unavailable").assertIsDisplayed()
+        compose.onNodeWithTag("tab_schedule").assertDoesNotExist()
+        if (firstRun) saveScreenshot("import-intro.png")
+        compose.onNodeWithTag("import_back").performClick()
+        compose.onNodeWithTag(initialTag).assertIsDisplayed()
+        if (firstRun) {
+            compose.onNodeWithTag("schedule_configure").performClick()
+            compose.onNodeWithTag("config_page").assertIsDisplayed()
+            compose.onNodeWithTag("config_back").performClick()
+            compose.onNodeWithTag("schedule_empty").assertIsDisplayed()
+        }
         compose.onNodeWithTag("tab_settings").performClick()
+        compose.onNodeWithTag("settings_page").assertIsDisplayed()
+        compose.onNodeWithTag("tab_settings").assertIsSelected()
+        compose.waitUntil(timeoutMillis = 30_000) { hasTag("settings_import") }
+        compose.onNodeWithTag("settings_import").performClick()
+        compose.onNodeWithTag("import_intro").assertIsDisplayed()
+        compose.onNodeWithTag("import_back").performClick()
         compose.onNodeWithTag("settings_page").assertIsDisplayed()
         compose.onNodeWithTag("settings_create").performClick()
         compose.onNodeWithTag("config_page").assertIsDisplayed()
@@ -38,8 +63,11 @@ class NavigationSmokeTest {
         compose.onNodeWithTag("config_back").performClick()
         compose.onNodeWithTag("settings_page").assertIsDisplayed()
         compose.onNodeWithTag("tab_schedule").performClick()
-        compose.onNodeWithTag("schedule_empty").assertIsDisplayed()
+        compose.onNodeWithTag(initialTag).assertIsDisplayed()
     }
+
+    private fun hasTag(tag: String): Boolean =
+        compose.onAllNodesWithTag(tag).fetchSemanticsNodes().isNotEmpty()
 
     private fun saveScreenshot(name: String) {
         val instrumentation = InstrumentationRegistry.getInstrumentation()

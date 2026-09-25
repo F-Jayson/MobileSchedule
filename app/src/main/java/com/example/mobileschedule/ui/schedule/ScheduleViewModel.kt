@@ -49,12 +49,13 @@ private data class BrowsingWeek(val semesterId: Long, val week: Int)
 @HiltViewModel
 class ScheduleViewModel @Inject constructor(private val repository: ScheduleRepository) : ViewModel() {
     private val today = MutableStateFlow(LocalDate.now())
+    private val retryRequests = MutableStateFlow(0)
     private val browsingWeek = MutableStateFlow<BrowsingWeek?>(null)
     private val selectedCourseId = MutableStateFlow<Long?>(null)
 
-    val uiState: StateFlow<ScheduleUiState> = combine(repository.observeActiveSemester(), today) { semester, date ->
-        semester to date
-    }.flatMapLatest { (result, date) ->
+    val uiState: StateFlow<ScheduleUiState> = retryRequests.flatMapLatest {
+        combine(repository.observeActiveSemester(), today) { semester, date -> semester to date }
+            .flatMapLatest { (result, date) ->
         val semester = (result as? RepoResult.Ok)?.value
         when {
             result is RepoResult.Err -> flowOf(ScheduleUiState.Error)
@@ -86,7 +87,9 @@ class ScheduleViewModel @Inject constructor(private val repository: ScheduleRepo
                 }
             }
         }
-    }.catch { emit(ScheduleUiState.Error) }
+            }.catch { emit(ScheduleUiState.Error) }
+            .onStart { emit(ScheduleUiState.Loading) }
+    }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), ScheduleUiState.Loading)
 
     val detailState: StateFlow<CourseDetailUiState> = selectedCourseId.flatMapLatest { id ->
@@ -115,6 +118,7 @@ class ScheduleViewModel @Inject constructor(private val repository: ScheduleRepo
 
     /** Called on resume so crossing midnight updates the real week without changing an explicit browsing week. */
     fun refreshToday(date: LocalDate = LocalDate.now()) { today.value = date }
+    fun retry() { retryRequests.value++ }
 
     fun selectWeek(week: Int) {
         val ready = uiState.value as? ScheduleUiState.Ready ?: return

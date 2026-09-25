@@ -2,6 +2,7 @@ package com.example.mobileschedule.ui.schedule
 
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
@@ -23,6 +24,7 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.text.style.TextOverflow
 import com.example.mobileschedule.data.model.WeekPosition
 
 /** Only this top bar interprets a horizontal drag as a week change. */
@@ -33,6 +35,7 @@ internal fun ScheduleWeekControls(
     onNextWeek: () -> Unit,
     onSelectWeek: (Int) -> Unit,
     onReturnToCurrentWeek: () -> Unit,
+    onImport: () -> Unit = {},
 ) {
     val schedule = state.week.schedule
     val totalWeeks = requireNotNull(state.week.semester.config).totalWeeks
@@ -43,13 +46,15 @@ internal fun ScheduleWeekControls(
     var showPicker by remember { mutableStateOf(false) }
 
     Column(Modifier.fillMaxWidth()) {
-        Text(state.week.semester.displayName,
-            modifier = Modifier.padding(start = 16.dp, top = 12.dp, end = 16.dp),
-            style = MaterialTheme.typography.titleLarge)
-        Row(
-            Modifier.fillMaxWidth()
-                .testTag("week_switch_bar")
-                .pointerInput(canPrevious, canNext, onPreviousWeek, onNextWeek, thresholdPx) {
+        Row(Modifier.fillMaxWidth().padding(start = 16.dp, top = 8.dp, end = 8.dp),
+            verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
+            Text(state.week.semester.displayName, modifier = Modifier.weight(1f).testTag("semester_name"),
+                maxLines = 2, overflow = TextOverflow.Ellipsis,
+                style = MaterialTheme.typography.titleLarge)
+            TextButton(onClick = onImport, modifier = Modifier.testTag("schedule_import_top")) { Text("导入") }
+        }
+        BoxWithConstraints(Modifier.fillMaxWidth().testTag("week_switch_bar")
+            .pointerInput(canPrevious, canNext, onPreviousWeek, onNextWeek, thresholdPx) {
                     detectHorizontalDragGestures(
                         onDragStart = { dragDistance = 0f },
                         onDragEnd = {
@@ -63,15 +68,30 @@ internal fun ScheduleWeekControls(
                             change.consume()
                         },
                     )
-                },
-        ) {
-            TextButton(onClick = onPreviousWeek, enabled = canPrevious,
-                modifier = Modifier.testTag("previous_week")) { Text("‹ 上周") }
-            TextButton(onClick = { showPicker = true }, modifier = Modifier.weight(1f).testTag("week_title")) {
-                Text("第${schedule.week}周 · ${schedule.monday.monthValue}/${schedule.monday.dayOfMonth}–${schedule.sunday.monthValue}/${schedule.sunday.dayOfMonth}")
+                }) {
+            val weekLabel = "第${schedule.week}周 · ${schedule.monday.monthValue}/${schedule.monday.dayOfMonth}–${schedule.sunday.monthValue}/${schedule.sunday.dayOfMonth}"
+            if (maxWidth < 420.dp || androidx.compose.ui.platform.LocalDensity.current.fontScale > 1.3f) {
+                Column {
+                    TextButton(onClick = { showPicker = true },
+                        modifier = Modifier.fillMaxWidth().testTag("week_title")) { Text(weekLabel) }
+                    Row(Modifier.fillMaxWidth(), horizontalArrangement = androidx.compose.foundation.layout.Arrangement.SpaceBetween) {
+                        TextButton(onClick = onPreviousWeek, enabled = canPrevious,
+                            modifier = Modifier.testTag("previous_week")) { Text("‹ 上周") }
+                        TextButton(onClick = onNextWeek, enabled = canNext,
+                            modifier = Modifier.testTag("next_week")) { Text("下周 ›") }
+                    }
+                }
+            } else {
+                Row(Modifier.fillMaxWidth()) {
+                    TextButton(onClick = onPreviousWeek, enabled = canPrevious,
+                        modifier = Modifier.testTag("previous_week")) { Text("‹ 上周") }
+                    TextButton(onClick = { showPicker = true }, modifier = Modifier.weight(1f).testTag("week_title")) {
+                        Text(weekLabel, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                    }
+                    TextButton(onClick = onNextWeek, enabled = canNext,
+                        modifier = Modifier.testTag("next_week")) { Text("下周 ›") }
+                }
             }
-            TextButton(onClick = onNextWeek, enabled = canNext,
-                modifier = Modifier.testTag("next_week")) { Text("下周 ›") }
         }
         when (val position = state.currentPosition) {
             WeekPosition.BeforeSemester -> {

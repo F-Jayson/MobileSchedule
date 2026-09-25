@@ -20,6 +20,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
@@ -35,7 +36,10 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
@@ -46,7 +50,6 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.compose.LifecycleEventEffect
 import com.example.mobileschedule.R
 import com.example.mobileschedule.data.model.ActiveWeek
-import com.example.mobileschedule.ui.common.FoundationPage
 import java.time.format.DateTimeFormatter
 import java.time.LocalDate
 import java.time.temporal.ChronoUnit
@@ -57,7 +60,12 @@ private val sectionWidth = 52.dp
 private val sectionHeight = 72.dp
 
 @Composable
-fun ScheduleRoute(viewModel: ScheduleViewModel = hiltViewModel()) {
+fun ScheduleRoute(
+    onConfigure: () -> Unit,
+    onSettings: () -> Unit,
+    onImport: () -> Unit,
+    viewModel: ScheduleViewModel = hiltViewModel(),
+) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     val detailState by viewModel.detailState.collectAsStateWithLifecycle()
     LifecycleEventEffect(Lifecycle.Event.ON_RESUME) { viewModel.refreshToday() }
@@ -70,6 +78,10 @@ fun ScheduleRoute(viewModel: ScheduleViewModel = hiltViewModel()) {
         onReturnToCurrentWeek = viewModel::returnToCurrentWeek,
         onCourseClick = viewModel::showCourseDetail,
         onDismissDetail = viewModel::closeCourseDetail,
+        onConfigure = onConfigure,
+        onSettings = onSettings,
+        onImport = onImport,
+        onRetry = viewModel::retry,
     )
 }
 
@@ -83,31 +95,50 @@ fun ScheduleScreen(
     onReturnToCurrentWeek: () -> Unit = {},
     onCourseClick: (Long) -> Unit = {},
     onDismissDetail: () -> Unit = {},
+    onConfigure: () -> Unit = {},
+    onSettings: () -> Unit = {},
+    onImport: () -> Unit = {},
+    onRetry: () -> Unit = {},
 ) {
     when (state) {
-        ScheduleUiState.Loading -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+        ScheduleUiState.Loading -> Column(Modifier.fillMaxSize().testTag("schedule_loading"),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = androidx.compose.foundation.layout.Arrangement.Center) {
             CircularProgressIndicator()
+            Text("正在读取本地课表…", modifier = Modifier.padding(top = 12.dp))
         }
-        ScheduleUiState.NoSemester -> FoundationPage(
+        ScheduleUiState.NoSemester -> ScheduleStatusPage(
             title = stringResource(R.string.schedule_empty_title),
             description = stringResource(R.string.schedule_empty_body),
-            modifier = Modifier.testTag("schedule_empty"),
+            tag = "schedule_empty", primaryLabel = "配置学期", primaryTag = "schedule_configure",
+            onPrimary = onConfigure, secondaryLabel = "导入课程表", secondaryTag = "schedule_import",
+            onSecondary = onImport,
         )
-        ScheduleUiState.ConfigRequired -> FoundationPage(
+        ScheduleUiState.ConfigRequired -> ScheduleStatusPage(
             title = stringResource(R.string.schedule_config_title),
             description = stringResource(R.string.schedule_config_body),
-            modifier = Modifier.testTag("schedule_config_required"),
+            tag = "schedule_config_required", primaryLabel = "完善学期配置", primaryTag = "schedule_settings",
+            onPrimary = onSettings, secondaryLabel = "导入课程表", secondaryTag = "schedule_import",
+            onSecondary = onImport,
         )
-        ScheduleUiState.Error -> FoundationPage(
+        ScheduleUiState.Error -> ScheduleStatusPage(
             title = stringResource(R.string.schedule_error_title),
             description = stringResource(R.string.schedule_error_body),
-            modifier = Modifier.testTag("schedule_error"),
+            tag = "schedule_error", primaryLabel = "重试读取", primaryTag = "schedule_retry",
+            onPrimary = onRetry, secondaryLabel = "打开设置", secondaryTag = "schedule_settings",
+            onSecondary = onSettings,
         )
         is ScheduleUiState.Ready -> Column(Modifier.fillMaxSize()) {
-            ScheduleWeekControls(state, onPreviousWeek, onNextWeek, onSelectWeek, onReturnToCurrentWeek)
+            ScheduleWeekControls(state, onPreviousWeek, onNextWeek, onSelectWeek, onReturnToCurrentWeek, onImport)
             if (state.week.schedule.arrangements.isEmpty()) {
-                Text("本周没有课程安排", modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
-                    style = MaterialTheme.typography.bodyMedium)
+                Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp),
+                    verticalAlignment = Alignment.CenterVertically) {
+                    Text("本周没有课程安排", modifier = Modifier.weight(1f).testTag("schedule_week_empty"),
+                        style = MaterialTheme.typography.bodyMedium)
+                    TextButton(onClick = onImport, modifier = Modifier.testTag("schedule_import")) {
+                        Text("导入课表")
+                    }
+                }
             }
             Box(Modifier.weight(1f)) {
                 WeekScheduleGrid(state.week, state.today, onCourseClick)
@@ -115,6 +146,21 @@ fun ScheduleScreen(
         }
     }
     CourseDetailSheet(detailState, onDismissDetail)
+}
+
+@Composable
+private fun ScheduleStatusPage(
+    title: String, description: String, tag: String,
+    primaryLabel: String, primaryTag: String, onPrimary: () -> Unit,
+    secondaryLabel: String, secondaryTag: String, onSecondary: () -> Unit,
+) {
+    Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(24.dp).testTag(tag),
+        verticalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(12.dp)) {
+        Text(title, style = MaterialTheme.typography.headlineSmall)
+        Text(description, style = MaterialTheme.typography.bodyLarge)
+        Button(onClick = onPrimary, modifier = Modifier.testTag(primaryTag)) { Text(primaryLabel) }
+        TextButton(onClick = onSecondary, modifier = Modifier.testTag(secondaryTag)) { Text(secondaryLabel) }
+    }
 }
 
 /** Header and cards share one horizontal position; the left section ruler stays visible. */
@@ -126,6 +172,9 @@ fun WeekScheduleGrid(
 ) {
     val config = requireNotNull(week.semester.config)
     val schedule = week.schedule
+    val fontScale = LocalDensity.current.fontScale.coerceIn(1f, 1.8f)
+    val rowHeight = sectionHeight * fontScale
+    val rulerWidth = sectionWidth * fontScale
     val horizontal = rememberScrollState()
     val vertical = rememberScrollState()
     val todayIndex = ChronoUnit.DAYS.between(schedule.monday, today).toInt().takeIf { it in 0..6 }
@@ -133,12 +182,12 @@ fun WeekScheduleGrid(
 
     Column(Modifier.fillMaxSize().testTag("week_grid")) {
         BoxWithConstraints(Modifier.fillMaxSize()) {
-            val dayWidth = maxOf(96.dp, (maxWidth - sectionWidth) / 7)
+            val dayWidth = maxOf(96.dp, (maxWidth - rulerWidth) / 7)
             val gridWidth = dayWidth * 7
-            val gridHeight = sectionHeight * config.totalSections
+            val gridHeight = rowHeight * config.totalSections
             Column(Modifier.fillMaxSize()) {
-                Row(Modifier.fillMaxWidth().height(54.dp)) {
-                    Text("节次\n时间", Modifier.width(sectionWidth).padding(top = 6.dp),
+                Row(Modifier.fillMaxWidth().height(54.dp * fontScale)) {
+                    Text("节次\n时间", Modifier.width(rulerWidth).padding(top = 6.dp),
                         textAlign = TextAlign.Center, style = MaterialTheme.typography.labelSmall)
                     Row(Modifier.weight(1f).horizontalScroll(horizontal).testTag("week_header_scroll")) {
                         weekdays.forEachIndexed { index, day ->
@@ -152,10 +201,10 @@ fun WeekScheduleGrid(
                     }
                 }
                 Row(Modifier.fillMaxWidth().weight(1f).verticalScroll(vertical)) {
-                    Column(Modifier.width(sectionWidth)) {
+                    Column(Modifier.width(rulerWidth)) {
                         repeat(config.totalSections) { index ->
                             val start = config.sectionTimes.firstOrNull { it.section == index + 1 }?.start
-                            Column(Modifier.height(sectionHeight).fillMaxWidth().padding(top = 5.dp),
+                            Column(Modifier.height(rowHeight).fillMaxWidth().padding(top = 5.dp),
                                 horizontalAlignment = Alignment.CenterHorizontally) {
                                 Text("${index + 1}", style = MaterialTheme.typography.labelLarge)
                                 Text(start?.format(timeFormat) ?: "—", style = MaterialTheme.typography.labelSmall)
@@ -164,20 +213,21 @@ fun WeekScheduleGrid(
                     }
                     Box(Modifier.weight(1f).horizontalScroll(horizontal).testTag("week_body_scroll")) {
                         Box(Modifier.width(gridWidth).height(gridHeight)) {
-                            WeekGridLines(gridWidth, gridHeight, dayWidth, config.totalSections, todayIndex)
+                            WeekGridLines(gridWidth, gridHeight, dayWidth, rowHeight, config.totalSections, todayIndex)
                             buildWeekGridSlots(schedule.arrangements).forEach { slot ->
                                 if (slot.arrangements.size == 2 && dayWidth >= 136.dp) {
                                     slot.arrangements.forEachIndexed { lane, course ->
                                         WeekGridCard(
                                             slot = WeekGridSlot(slot.dayOfWeek, course.startSection, course.endSection, listOf(course)),
                                             dayWidth = dayWidth,
+                                            rowHeight = rowHeight,
                                             lane = lane,
                                             laneCount = 2,
                                             onClick = { onCourseClick(course.id) },
                                         )
                                     }
                                 } else {
-                                    WeekGridCard(slot = slot, dayWidth = dayWidth, onClick = {
+                                    WeekGridCard(slot = slot, dayWidth = dayWidth, rowHeight = rowHeight, onClick = {
                                         val course = slot.arrangements.singleOrNull()
                                         if (course != null) onCourseClick(course.id)
                                         else overlappingCourses = slot.arrangements
@@ -211,7 +261,8 @@ fun WeekScheduleGrid(
 }
 
 @Composable
-private fun WeekGridLines(gridWidth: Dp, gridHeight: Dp, dayWidth: Dp, sectionCount: Int, todayIndex: Int?) {
+private fun WeekGridLines(gridWidth: Dp, gridHeight: Dp, dayWidth: Dp, rowHeight: Dp,
+    sectionCount: Int, todayIndex: Int?) {
     val lineColor = MaterialTheme.colorScheme.outlineVariant
     val todayColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.32f)
     Canvas(Modifier.width(gridWidth).height(gridHeight)) {
@@ -224,25 +275,31 @@ private fun WeekGridLines(gridWidth: Dp, gridHeight: Dp, dayWidth: Dp, sectionCo
             drawLine(lineColor, Offset(x, 0f), Offset(x, size.height), 1.dp.toPx())
         }
         for (section in 0..sectionCount) {
-            val y = sectionHeight.toPx() * section
+            val y = rowHeight.toPx() * section
             drawLine(lineColor, Offset(0f, y), Offset(size.width, y), 1.dp.toPx())
         }
     }
 }
 
 @Composable
-private fun WeekGridCard(slot: WeekGridSlot, dayWidth: Dp, onClick: () -> Unit,
+private fun WeekGridCard(slot: WeekGridSlot, dayWidth: Dp, rowHeight: Dp, onClick: () -> Unit,
     lane: Int = 0, laneCount: Int = 1) {
     val course = slot.arrangements.singleOrNull()
     val tag = if (course != null) "course_${course.id}" else "overlap_${slot.dayOfWeek}_${slot.startSection}"
+    val description = if (course == null) {
+        "${weekdays[slot.dayOfWeek - 1]}，第${slot.startSection}至${slot.endSection}节，同一时段${slot.arrangements.size}门课程，点击查看列表"
+    } else {
+        "${weekdays[slot.dayOfWeek - 1]}，第${slot.startSection}至${slot.endSection}节，${course.name}，${course.location ?: "地点未提供"}"
+    }
     Card(
         modifier = Modifier
             .offset(x = dayWidth * (slot.dayOfWeek - 1) + dayWidth / laneCount * lane + 3.dp,
-                y = sectionHeight * (slot.startSection - 1) + 3.dp)
+                y = rowHeight * (slot.startSection - 1) + 3.dp)
             .width(dayWidth / laneCount - 6.dp)
-            .height(sectionHeight * slot.sectionSpan - 6.dp)
+            .height(rowHeight * slot.sectionSpan - 6.dp)
             .testTag(tag)
-            .clickable(onClick = onClick),
+            .clickable(onClick = onClick)
+            .semantics(mergeDescendants = true) { contentDescription = description },
     ) {
         Column(Modifier.fillMaxSize().padding(5.dp)) {
             if (course == null) {
