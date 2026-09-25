@@ -33,15 +33,16 @@ import org.junit.runner.RunWith
 class WeekGridLayoutTest {
     @get:Rule val compose = createComposeRule()
 
-    @Test fun crossSectionCardUsesRowHeightAndOpensFullInformation() {
-        compose.setContent { MaterialTheme { WeekScheduleGrid(fixture()) } }
+    @Test fun crossSectionCardUsesRowHeightAndForwardsDetailId() {
+        var selectedId = -1L
+        compose.setContent { MaterialTheme { WeekScheduleGrid(fixture(), onCourseClick = { selectedId = it }) } }
         val bounds = compose.onNodeWithTag("course_2").fetchSemanticsNode().boundsInRoot
         val single = compose.onNodeWithTag("course_1").fetchSemanticsNode().boundsInRoot
         assertTrue("a two-section card must be taller than a one-section card", bounds.height > single.height * 1.8f)
         assertTrue("Tuesday must be right of Monday", bounds.left > single.left)
         assertTrue("section 3 must be below section 1", bounds.top > single.top)
         compose.onNodeWithTag("course_2").performClick()
-        compose.onNodeWithTag("course_info").assertIsDisplayed()
+        compose.runOnIdle { org.junit.Assert.assertEquals(2L, selectedId) }
     }
 
     @Test fun horizontalScrollKeepsHeaderAlignedAndExposesWeekend() {
