@@ -21,7 +21,8 @@ import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import com.example.mobileschedule.R
 import com.example.mobileschedule.ui.schedule.ScheduleRoute
-import com.example.mobileschedule.ui.settings.SettingsScreen
+import com.example.mobileschedule.ui.settings.SettingsConfigRoute
+import com.example.mobileschedule.ui.settings.SettingsRoute
 import com.example.mobileschedule.ui.today.TodayScreen
 
 private enum class Destination(
@@ -40,21 +41,23 @@ fun MobileScheduleApp() {
     val entry by navController.currentBackStackEntryAsState()
     Scaffold(
         bottomBar = {
-            NavigationBar {
-                Destination.entries.forEach { destination ->
-                    NavigationBarItem(
-                        selected = entry?.destination?.route == destination.route,
-                        onClick = {
-                            navController.navigate(destination.route) {
-                                popUpTo(navController.graph.findStartDestination().id) { saveState = true }
-                                launchSingleTop = true
-                                restoreState = true
-                            }
-                        },
-                        icon = { Icon(painterResource(destination.icon), contentDescription = null) },
-                        label = { Text(stringResource(destination.label)) },
-                        modifier = Modifier.testTag("tab_${destination.route}"),
-                    )
+            if (entry?.destination?.route?.startsWith("config/") != true) {
+                NavigationBar {
+                    Destination.entries.forEach { destination ->
+                        NavigationBarItem(
+                            selected = entry?.destination?.route == destination.route,
+                            onClick = {
+                                navController.navigate(destination.route) {
+                                    popUpTo(navController.graph.findStartDestination().id) { saveState = true }
+                                    launchSingleTop = true
+                                    restoreState = true
+                                }
+                            },
+                            icon = { Icon(painterResource(destination.icon), contentDescription = null) },
+                            label = { Text(stringResource(destination.label)) },
+                            modifier = Modifier.testTag("tab_${destination.route}"),
+                        )
+                    }
                 }
             }
         },
@@ -62,7 +65,17 @@ fun MobileScheduleApp() {
         NavHost(navController, startDestination = Destination.SCHEDULE.route, modifier = Modifier.padding(padding)) {
             composable(Destination.SCHEDULE.route) { ScheduleRoute() }
             composable(Destination.TODAY.route) { TodayScreen() }
-            composable(Destination.SETTINGS.route) { SettingsScreen() }
+            composable(Destination.SETTINGS.route) {
+                SettingsRoute(onCreate = { navController.navigate("config/new") },
+                    onEdit = { id -> navController.navigate("config/$id") })
+            }
+            composable("config/new") {
+                SettingsConfigRoute(null, onBack = { navController.popBackStack() })
+            }
+            composable("config/{semesterId}") { configEntry ->
+                val semesterId = configEntry.arguments?.getString("semesterId")?.toLongOrNull()
+                SettingsConfigRoute(semesterId, onBack = { navController.popBackStack() })
+            }
         }
     }
 }
