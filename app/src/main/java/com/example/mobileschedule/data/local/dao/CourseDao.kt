@@ -23,6 +23,10 @@ interface CourseDao {
     suspend fun getCourse(arrangementId: Long): CourseWithWeeks?
 
     @Transaction
+    @Query("SELECT * FROM courses WHERE id = :arrangementId")
+    fun observeCourse(arrangementId: Long): Flow<CourseWithWeeks?>
+
+    @Transaction
     @Query("SELECT * FROM courses WHERE semesterId = :semesterId ORDER BY dayOfWeek, startSection, endSection, id")
     fun observeSemesterCourses(semesterId: Long): Flow<List<CourseWithWeeks>>
 

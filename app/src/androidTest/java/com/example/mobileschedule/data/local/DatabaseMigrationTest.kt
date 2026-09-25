@@ -8,6 +8,9 @@ import com.example.mobileschedule.data.local.entity.toModel
 import com.example.mobileschedule.data.model.Course
 import com.example.mobileschedule.data.model.CourseOrigin
 import com.example.mobileschedule.data.repository.OfflineCourseRepository
+import com.example.mobileschedule.data.repository.OfflineScheduleRepository
+import com.example.mobileschedule.data.model.DataErrorCode
+import com.example.mobileschedule.data.model.RepoResult
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
@@ -72,6 +75,15 @@ class DatabaseMigrationTest {
                 assertEquals(null, semester.config)
                 assertTrue(semester.sourceBindings.isEmpty())
                 assertEquals(CourseOrigin.Legacy, room.courseDao().getCourse(8)!!.toArrangement().origin)
+                val reads = OfflineScheduleRepository(room)
+                val week = reads.observeActiveWeek(1).first()
+                assertTrue(week is RepoResult.Err && week.error.code == DataErrorCode.CONFIG_REQUIRED)
+                val detail = reads.observeCourseDetail(8).first() as RepoResult.Ok
+                assertEquals(setOf(1, 3, 9), detail.value!!.arrangement.weeks)
+                assertEquals(CourseOrigin.Legacy, detail.value!!.arrangement.origin)
+                assertEquals(null, detail.value!!.startTime)
+                val imports = reads.observeImportStatus(semester.id).first() as RepoResult.Ok
+                assertTrue(imports.value.sources.isEmpty())
             }
             db.execSQL("INSERT INTO courses (name, teacher, location, dayOfWeek, startSection, endSection, semesterId, originType) VALUES ('新增', NULL, NULL, 1, 1, 1, 1, 'MANUAL')")
             db.query("SELECT id FROM courses WHERE name = '新增'").use {

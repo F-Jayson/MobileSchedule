@@ -206,10 +206,14 @@ class ImportTransactionTest {
         assertEquals(setOf(1, 3), after.weeks)
         assertEquals(first.batchId, (after.origin as CourseOrigin.SchoolImport).batchId)
         assertEquals(1, database.importBatchDao().getBatch(first.batchId)!!.savedCount)
+        val rolledBackStatus = ok(repository.observeImportStatus(target.id).first())
+        assertEquals(first.batchId, rolledBackStatus.sources.single().latestBatch!!.id)
+        assertEquals(1, rolledBackStatus.importedArrangementCount)
         val recovered = ok(repository.commitImport(preview.previewId,
             ImportConfirmation(preview.previewId, preview.scope!!, 1, 1)))
         assertEquals(1, recovered.savedCount)
         assertEquals("新课", ok(repository.observeWeek(target.id, 1).first()).arrangements.single().name)
+        assertEquals(recovered.batchId, ok(repository.observeImportStatus(target.id).first()).sources.single().latestBatch!!.id)
     }
 
     @Test fun failedFirstImportLeavesNoBindingOrPartialCourses() = runBlocking {

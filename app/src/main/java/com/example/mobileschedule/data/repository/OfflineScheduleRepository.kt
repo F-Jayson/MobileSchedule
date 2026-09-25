@@ -13,6 +13,12 @@ import com.example.mobileschedule.data.model.ImportRequest
 import com.example.mobileschedule.data.model.ImportPreview
 import com.example.mobileschedule.data.model.ImportConfirmation
 import com.example.mobileschedule.data.model.ImportReceipt
+import com.example.mobileschedule.data.model.ActiveWeek
+import com.example.mobileschedule.data.model.CourseDetail
+import com.example.mobileschedule.data.model.ImportBatch
+import com.example.mobileschedule.data.model.ImportSourceStatus
+import com.example.mobileschedule.data.model.SemesterImportStatus
+import com.example.mobileschedule.data.model.SourceScope
 import com.example.mobileschedule.data.model.RepoResult
 import com.example.mobileschedule.data.model.Semester
 import com.example.mobileschedule.data.model.SemesterConfig
@@ -21,16 +27,21 @@ import com.example.mobileschedule.data.model.WeekPosition
 import com.example.mobileschedule.data.model.WeekSchedule
 import com.example.mobileschedule.data.rules.ScheduleRules
 import java.time.LocalDate
+import java.time.Instant
 import javax.inject.Inject
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 
 class OfflineScheduleRepository @Inject constructor(private val database: AppDatabase) : ScheduleRepository {
     private val semesters = database.semesterDao()
     private val courses = database.courseDao()
+    private val batches = database.importBatchDao()
     private val imports = ImportCoordinator(database)
 
     override suspend fun prepareImport(request: ImportRequest): RepoResult<ImportPreview> = imports.prepare(request)
@@ -63,6 +74,49 @@ class OfflineScheduleRepository @Inject constructor(private val database: AppDat
                     else RepoResult.Ok(ScheduleRules.weekSchedule(semesterId, config, week, courseRows.map { it.toArrangement() }))
                 }
             }
+        }.asReadResult()
+
+    @OptIn(ExperimentalCoroutinesApi::class)
+    override fun observeActiveWeek(selectedWeek: Int): Flow<RepoResult<ActiveWeek?>> =
+        semesters.observeActiveSemester().flatMapLatest { active ->
+            if (active == null) flowOf(RepoResult.Ok<ActiveWeek?>(null))
+            else observeWeek(active.semester.id, selectedWeek).map { result ->
+                when (result) {
+                    is RepoResult.Ok -> RepoResult.Ok(ActiveWeek(active.toModel(), result.value))
+                    is RepoResult.Err -> result
+                }
+            }
+        }.asReadResult()
+
+    @OptIn(ExperimentalCoroutinesApi::class)
+    override fun observeCourseDetail(arrangementId: Long): Flow<RepoResult<CourseDetail?>> =
+        courses.observeCourse(arrangementId).flatMapLatest { row ->
+            if (row == null) flowOf(RepoResult.Ok<CourseDetail?>(null))
+            else semesters.observeSemester(row.course.semesterId).map { semesterRow ->
+                if (semesterRow == null) RepoResult.Err(DataError(DataErrorCode.STORAGE_READ_FAILED))
+                else {
+                    val semester = semesterRow.toModel()
+                    val config = semester.config
+                    RepoResult.Ok(CourseDetail(row.toArrangement(), semester.displayName,
+                        config?.sectionTimes?.firstOrNull { it.section == row.course.startSection }?.start,
+                        config?.sectionTimes?.firstOrNull { it.section == row.course.endSection }?.end))
+                }
+            }
+        }.asReadResult()
+
+    override fun observeImportStatus(semesterId: Long): Flow<RepoResult<SemesterImportStatus>> =
+        batches.observeImportStatus(semesterId).map { rows ->
+            if (rows.isEmpty()) RepoResult.Err(DataError(DataErrorCode.SEMESTER_NOT_FOUND))
+            else RepoResult.Ok(SemesterImportStatus(semesterId, rows.filter { it.schoolId != null }
+                .distinctBy { Triple(it.schoolId, it.sourceId, it.sourceTermId) }.map { row ->
+                    val scope = SourceScope(requireNotNull(row.schoolId), requireNotNull(row.sourceId),
+                        requireNotNull(row.sourceTermId))
+                    ImportSourceStatus(scope, row.sourceTermLabel,
+                        row.batchId?.let { batchId -> ImportBatch(batchId, semesterId, scope,
+                            Instant.ofEpochMilli(requireNotNull(row.committedAt)),
+                            requireNotNull(row.savedCount), requireNotNull(row.removedCount)) },
+                        row.currentArrangementCount)
+                }))
         }.asReadResult()
 
     override suspend fun weekPosition(semesterId: Long, today: LocalDate): RepoResult<WeekPosition> = try {
