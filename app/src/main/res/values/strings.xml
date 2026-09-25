@@ -5,8 +5,9 @@
     <string name="tab_today">今日</string>
     <string name="tab_settings">设置</string>
     <string name="schedule_empty_title">欢迎使用课程表</string>
-    <string name="schedule_empty_body">这里将展示你的每周课程。当前为基础框架，尚未接入课表导入与课程编辑。</string>
-    <string name="schedule_foundation_title">课程数据</string>
+    <string name="schedule_empty_body">还没有活动学期。完成学期配置后，可在这里查看每周课程。</string>
+    <string name="schedule_config_title">请先配置学期</string>
+    <string name="schedule_config_body">当前学期缺少首周日期、周数或节次配置。完成配置后即可查看周课表。</string>
     <string name="schedule_error_title">暂时无法读取课表</string>
     <string name="schedule_error_body">请重新打开应用后重试。若仍有问题，请保留错误记录以便排查。</string>
     <string name="today_title">今日课程</string>
