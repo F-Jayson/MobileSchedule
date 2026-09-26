@@ -4,6 +4,7 @@ import android.annotation.SuppressLint
 import android.graphics.Bitmap
 import android.net.http.SslError
 import android.webkit.CookieManager
+import android.webkit.WebStorage
 import android.webkit.SslErrorHandler
 import android.webkit.WebChromeClient
 import android.webkit.WebResourceError
@@ -101,6 +102,8 @@ fun ZhengfangOnlineReadScreen(
     var generation by remember { mutableIntStateOf(0) }
     var pendingTerm by remember { mutableStateOf<ZhengfangSourceTerm?>(null) }
     var showingPreview by remember { mutableStateOf(false) }
+    var previewRead by remember { mutableStateOf<OnlineReadState.Ready?>(null) }
+    var leaving by remember { mutableStateOf(false) }
     val selected = ZhengfangOnlineRead.selectTerm(yearText, termNumber)
     val reading = readState == OnlineReadState.Reading
 
@@ -142,9 +145,11 @@ fun ZhengfangOnlineReadScreen(
                         readState = if (body == null || requestedTerm == null) OnlineReadState.Failed("课表响应为空或无法读取，请重试。")
                         else try {
                             val parsed = ZhengfangOnlineRead.parse(body, targetSemesterId, requestedTerm)
+                            val ready = OnlineReadState.Ready(requestedTerm, parsed)
+                            previewRead = ready
                             onPreparePreview(parsed)
                             showingPreview = true
-                            OnlineReadState.Ready(requestedTerm, parsed)
+                            ready
                         } catch (error: ZhengfangParseException) {
                             OnlineReadState.Failed(parseErrorMessage(error.diagnostic.code))
                         } catch (_: IllegalArgumentException) {
@@ -181,7 +186,7 @@ fun ZhengfangOnlineReadScreen(
     DisposableEffect(webView) {
         onDispose {
             generation++
-            webView.stopLoading()
+            clearTemporarySchoolSession(webView)
             webView.destroy()
         }
     }
@@ -203,22 +208,48 @@ fun ZhengfangOnlineReadScreen(
         readState = OnlineReadState.Canceled
     }
     fun exit() {
+        if (leaving || previewState is OnlineImportPreviewState.Saving) return
+        leaving = true
         generation++
-        webView.stopLoading()
         onInvalidatePreview()
-        CookieManager.getInstance().removeAllCookies(null)
+        readState = OnlineReadState.Idle
+        pendingTerm = null
+        showingPreview = false
+        previewRead = null
+        clearTemporarySchoolSession(webView)
         onExit()
+    }
+    fun finishToSchedule() {
+        if (leaving || previewState is OnlineImportPreviewState.Saving) return
+        leaving = true
+        generation++
+        onInvalidatePreview()
+        readState = OnlineReadState.Idle
+        pendingTerm = null
+        showingPreview = false
+        previewRead = null
+        clearTemporarySchoolSession(webView)
+        onOpenSchedule()
+    }
+    fun verifyCurrentRead(matchedCount: Int) {
+        val current = previewRead ?: return
+        if (!showingPreview) return
+        if (ZhengfangOnlineRead.selectTerm(yearText, termNumber) != current.selected) return
+        val verified = ZhengfangOnlineRead.withUserConfirmedFullCoverage(current.parsed, matchedCount)
+            ?: return
+        onPreparePreview(verified)
     }
     fun closePreview() {
         if (previewState is OnlineImportPreviewState.Saving) return
         onInvalidatePreview()
         showingPreview = false
+        previewRead = null
         readState = OnlineReadState.Idle
     }
     BackHandler {
         when {
             showingPreview && previewState is OnlineImportPreviewState.Saving -> Unit
-            showingPreview && previewState is OnlineImportPreviewState.Saved -> onOpenSchedule()
+            showingPreview && previewState is OnlineImportPreviewState.Saved -> finishToSchedule()
             showingPreview -> closePreview()
             reading -> cancelRead()
             webView.canGoBack() -> webView.goBack()
@@ -228,7 +259,8 @@ fun ZhengfangOnlineReadScreen(
 
     if (showingPreview) {
         OnlineImportPreviewScreen(previewState, onBack = ::closePreview, onReadAgain = ::closePreview,
-            onConfirm = onConfirmPreview, onOpenSchedule = onOpenSchedule)
+            onConfirm = onConfirmPreview, onOpenSchedule = ::finishToSchedule,
+            onConfirmFullCoverage = ::verifyCurrentRead)
         return
     }
 
@@ -249,6 +281,7 @@ fun ZhengfangOnlineReadScreen(
                 if (it != yearText) {
                     onInvalidatePreview()
                     readState = OnlineReadState.Idle
+                    previewRead = null
                 }
                 yearText = it
             },
@@ -262,6 +295,7 @@ fun ZhengfangOnlineReadScreen(
                             if (termNumber != number) {
                                 onInvalidatePreview()
                                 readState = OnlineReadState.Idle
+                                previewRead = null
                                 termNumber = number
                             }
                         },
@@ -275,6 +309,7 @@ fun ZhengfangOnlineReadScreen(
                     val sourceTerm = selected ?: return@Button
                     generation++
                     onInvalidatePreview()
+                    previewRead = null
                     pendingTerm = sourceTerm
                     readState = OnlineReadState.Reading
                     webView.postUrl(ZhengfangOnlineRead.SCHEDULE_URL,
@@ -290,9 +325,19 @@ fun ZhengfangOnlineReadScreen(
                     CircularProgressIndicator()
                     Text("正在读取并解析课表…")
                 }
-                OnlineReadState.Canceled -> Text("已取消读取，本地课表未改变。")
-                is OnlineReadState.Failed -> Text(state.message, color = MaterialTheme.colorScheme.error,
-                    modifier = Modifier.testTag("online_read_error"))
+                OnlineReadState.Canceled -> {
+                    Text("已取消读取，本地课表未改变。")
+                    TextButton(onClick = ::exit, modifier = Modifier.testTag("online_return_schedule")) {
+                        Text("返回本地课表")
+                    }
+                }
+                is OnlineReadState.Failed -> {
+                    Text(state.message, color = MaterialTheme.colorScheme.error,
+                        modifier = Modifier.testTag("online_read_error"))
+                    TextButton(onClick = ::exit, modifier = Modifier.testTag("online_return_schedule")) {
+                        Text("返回本地课表")
+                    }
+                }
                 is OnlineReadState.Ready -> Text(
                     "${state.parsed.request.sourceTermLabel ?: state.selected.sourceLabel}：读取 ${state.parsed.request.sourceObservedCount ?: 0} 条课程安排，" +
                         "解析 ${state.parsed.parsedRowCount} 条，错误 ${state.parsed.diagnostics.size} 条。" +
@@ -305,6 +350,15 @@ fun ZhengfangOnlineReadScreen(
             AndroidView(factory = { webView }, modifier = Modifier.fillMaxWidth().weight(1f))
         }
     }
+}
+
+private fun clearTemporarySchoolSession(webView: WebView) {
+    webView.stopLoading()
+    webView.clearFormData()
+    webView.clearHistory()
+    webView.clearCache(true)
+    WebStorage.getInstance().deleteAllData()
+    CookieManager.getInstance().removeAllCookies { CookieManager.getInstance().flush() }
 }
 
 private fun String.isSchoolHost(): Boolean = try {

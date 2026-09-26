@@ -38,7 +38,8 @@ object ImportValidator {
             CompletenessStatus.VERIFIED_FULL -> {
                 val pageCount = evidence.expectedPageCount
                 val covered = if (pageCount == null) {
-                    // B explicitly verified an unpaginated source; one logical page is represented as index 0.
+                    // One independently verified logical response is represented as index 0;
+                    // this does not assert a server-reported total or pagination scheme.
                     evidence.pageIndicesRead == listOf(0)
                 } else pageCount > 0 && evidence.pageIndicesRead.size == pageCount &&
                     evidence.pageIndicesRead.toSet().size == pageCount &&

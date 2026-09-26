@@ -2,6 +2,7 @@ package com.example.mobileschedule.data.importer
 
 import com.example.mobileschedule.data.model.CompletenessEvidence
 import com.example.mobileschedule.data.model.CompletenessStatus
+import com.example.mobileschedule.data.model.ImportIssueStage
 import java.net.URI
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
@@ -79,6 +80,31 @@ object ZhengfangOnlineRead {
                 "School term echoed in response when present; pagination and full coverage not verified",
             ),
         ))
+    }
+
+    /** A fresh, explicit comparison with an official full-term schedule applies to this read only. */
+    fun withUserConfirmedFullCoverage(
+        parsed: ParsedZhengfangSchedule,
+        matchedCount: Int,
+    ): ParsedZhengfangSchedule? {
+        val request = parsed.request
+        val sourceTermId = request.sourceTermId ?: return null
+        val readCount = request.sourceObservedCount ?: return null
+        if (request.completeness.status != CompletenessStatus.UNKNOWN ||
+            request.completeness.selectedSourceTermId != sourceTermId ||
+            matchedCount <= 0 || matchedCount != readCount || parsed.parsedRowCount != readCount ||
+            parsed.diagnostics.isNotEmpty() ||
+            request.parseIssues.any { it.stage != ImportIssueStage.WARNING }
+        ) return null
+        return parsed.copy(request = request.copy(completeness = request.completeness.copy(
+            status = CompletenessStatus.VERIFIED_FULL,
+            pageIndicesRead = listOf(0),
+            expectedPageCount = null,
+            reportedSourceTotalCount = null,
+            basis = "user-confirmed comparison with official full-semester schedule for " +
+                "$sourceTermId; matched $matchedCount arrangements in this read; " +
+                "school did not report total or page count",
+        )))
     }
 
     private fun JsonObject.text(key: String): String? =

@@ -10,8 +10,11 @@ import com.example.mobileschedule.data.local.entity.ImportBatchEntity
 import com.example.mobileschedule.data.local.entity.SourceBindingEntity
 import com.example.mobileschedule.data.model.*
 import java.time.LocalDate
+import kotlinx.coroutines.CoroutineStart
+import kotlinx.coroutines.async
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.withTimeout
 import org.junit.After
 import org.junit.Assert.*
 import org.junit.Before
@@ -89,6 +92,25 @@ class ImportTransactionTest {
         err(repository.commitImport(preview.previewId, ImportConfirmation(preview.previewId, preview.scope!!, 2, 2)),
             DataErrorCode.PREVIEW_STALE)
         assertEquals(2, ok(repository.observeWeek(target.id, 1).first()).arrangements.size)
+    }
+
+    @Test fun activeWeekSubscriberReceivesCommittedArrangementAfterReturningFromImport() = runBlocking {
+        val target = semester()
+        ok(repository.setActiveSemester(target.id))
+        assertTrue(ok(repository.observeActiveWeek(1).first())!!.schedule.arrangements.isEmpty())
+        val updated = async(start = CoroutineStart.UNDISPATCHED) {
+            withTimeout(10_000) {
+                repository.observeActiveWeek(1).first { result ->
+                    (result as? RepoResult.Ok)?.value?.schedule?.arrangements?.size == 1
+                }
+            }
+        }
+
+        val receipt = save(request(target.id, listOf(row(0, "合成导入课", weeks = setOf(1)))))
+        val active = ok(updated.await())!!
+        assertEquals(target.id, active.semester.id)
+        assertEquals(receipt.savedCount, active.schedule.arrangements.size)
+        assertEquals("合成导入课", active.schedule.arrangements.single().name)
     }
 
     @Test fun replacementIsolatesSourceTermChannelSemesterAndManualRows() = runBlocking {

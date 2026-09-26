@@ -14,6 +14,7 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -25,9 +26,11 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.text.input.KeyboardType
 import com.example.mobileschedule.data.importer.ZhengfangImportPreviewSummary
 import com.example.mobileschedule.data.importer.ZhengfangParseDiagnostic
 import com.example.mobileschedule.data.importer.ZhengfangParseErrorCode
@@ -47,11 +50,17 @@ fun OnlineImportPreviewScreen(
     onReadAgain: () -> Unit,
     onConfirm: () -> Unit = {},
     onOpenSchedule: () -> Unit = {},
+    onConfirmFullCoverage: (Int) -> Unit = {},
 ) {
     var confirmationOpen by remember { mutableStateOf(false) }
+    var coverageOpen by remember { mutableStateOf(false) }
+    var matchedCountText by remember { mutableStateOf("") }
     LaunchedEffect(state) {
-        if (state !is OnlineImportPreviewState.Ready && state !is OnlineImportPreviewState.SaveFailed)
+        if (state !is OnlineImportPreviewState.Ready && state !is OnlineImportPreviewState.SaveFailed) {
             confirmationOpen = false
+            coverageOpen = false
+            matchedCountText = ""
+        }
     }
     val summary = when (state) {
         is OnlineImportPreviewState.Ready -> state.summary
@@ -64,6 +73,35 @@ fun OnlineImportPreviewScreen(
         is OnlineImportPreviewState.Ready -> state.summary.canCommit
         is OnlineImportPreviewState.SaveFailed -> state.retryable && state.summary.canCommit
         else -> false
+    }
+    val canVerifyCoverage = state is OnlineImportPreviewState.Ready &&
+        state.summary.completeness.status == CompletenessStatus.UNKNOWN &&
+        state.summary.sourceTermId != null &&
+        state.summary.readCount != null && state.summary.readCount > 0 &&
+        state.summary.parsedCount == state.summary.readCount && state.summary.errorCount == 0
+    if (coverageOpen && canVerifyCoverage && summary != null) {
+        AlertDialog(onDismissRequest = { coverageOpen = false },
+            title = { Text("核实本次完整学期课表") },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text("请先用学校官方发布的完整学期课表逐条核对本次读取的 " +
+                        "${summary.readCount} 条课程安排，确认没有其他安排。此确认仅适用于当前读取和来源学期。")
+                    OutlinedTextField(value = matchedCountText,
+                        onValueChange = { matchedCountText = it.filter(Char::isDigit).take(5) },
+                        label = { Text("已逐条核对的安排数") }, singleLine = true,
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                        modifier = Modifier.testTag("preview_verified_count"))
+                }
+            },
+            confirmButton = { TextButton(onClick = {
+                val count = matchedCountText.toIntOrNull() ?: return@TextButton
+                coverageOpen = false
+                matchedCountText = ""
+                onConfirmFullCoverage(count)
+            }, enabled = matchedCountText.toIntOrNull() == summary.readCount,
+                modifier = Modifier.testTag("preview_verify_confirm")) { Text("确认本次完整覆盖") } },
+            dismissButton = { TextButton(onClick = { coverageOpen = false }) { Text("取消") } },
+        )
     }
     if (confirmationOpen && canAskConfirmation && summary?.replacementScope != null &&
         summary.replaceCount != null) {
@@ -128,6 +166,9 @@ fun OnlineImportPreviewScreen(
                     Text(state.message, color = MaterialTheme.colorScheme.error,
                         modifier = Modifier.testTag("preview_error"))
                     TextButton(onClick = onReadAgain) { Text("返回重新读取") }
+                    TextButton(onClick = onOpenSchedule, modifier = Modifier.testTag("preview_leave")) {
+                        Text("放弃导入并返回课表")
+                    }
                 }
                 is OnlineImportPreviewState.Saving -> {
                     CircularProgressIndicator(modifier = Modifier.testTag("preview_saving"))
@@ -147,8 +188,20 @@ fun OnlineImportPreviewScreen(
                     Text(state.message, color = MaterialTheme.colorScheme.error,
                         modifier = Modifier.testTag("preview_save_error"))
                     PreviewSummaryContent(state.summary, onReadAgain)
+                    TextButton(onClick = onOpenSchedule, modifier = Modifier.testTag("preview_leave")) {
+                        Text("放弃导入并返回课表")
+                    }
                 }
-                is OnlineImportPreviewState.Ready -> PreviewSummaryContent(state.summary, onReadAgain)
+                is OnlineImportPreviewState.Ready -> {
+                    PreviewSummaryContent(state.summary, onReadAgain)
+                    if (canVerifyCoverage) TextButton(onClick = { coverageOpen = true },
+                        modifier = Modifier.testTag("preview_verify_full")) {
+                        Text("已与学校官方完整学期课表逐条核对")
+                    }
+                    TextButton(onClick = onOpenSchedule, modifier = Modifier.testTag("preview_leave")) {
+                        Text("放弃导入并返回课表")
+                    }
+                }
             }
         }
     }
@@ -204,7 +257,7 @@ private fun PreviewCourseRow(row: PreviewArrangement) {
 }
 
 private fun completenessText(status: CompletenessStatus): String = when (status) {
-    CompletenessStatus.UNKNOWN -> "无法确认已读取完整学期；请核实学校来源总数或完整分页，当前禁止保存。"
+    CompletenessStatus.UNKNOWN -> "无法确认已读取完整学期；请核实学校来源总数、完整分页，或与官方完整学期课表逐条核对，当前禁止保存。"
     CompletenessStatus.PARTIAL -> "只读取到部分课表或来源数量不一致，当前禁止保存。"
     CompletenessStatus.VERIFIED_FULL -> "来源课表完整性已核实。"
 }

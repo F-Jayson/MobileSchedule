@@ -5,6 +5,7 @@ import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.assertIsEnabled
 import androidx.compose.ui.test.assertTextContains
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performTextReplacement
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
@@ -13,7 +14,9 @@ import com.example.mobileschedule.data.importer.ZhengfangOnlineRead
 import com.example.mobileschedule.data.importer.ParsedZhengfangSchedule
 import com.example.mobileschedule.data.importer.toPreviewSummary
 import com.example.mobileschedule.data.model.CompletenessStatus
+import com.example.mobileschedule.data.model.ImportReceipt
 import com.example.mobileschedule.data.model.SemesterConfig
+import com.example.mobileschedule.data.model.SourceScope
 import com.example.mobileschedule.data.rules.ImportValidator
 import com.example.mobileschedule.ui.importentry.OnlineImportPreviewScreen
 import com.example.mobileschedule.ui.importentry.OnlineImportPreviewState
@@ -95,5 +98,52 @@ class OnlineImportPreviewScreenTest {
         compose.onNodeWithTag("preview_confirm").performClick()
         compose.onNodeWithTag("preview_dialog_confirm").performClick()
         compose.runOnIdle { assertEquals(1, confirms) }
+    }
+
+    @Test fun cancelPreviewReturnsToLocalScheduleWithoutSubmitting() {
+        val state = preview("""{"xsxx":{"XNM":"2026","XQM":"3"},"sjkList":[],"kbList":[{"kcmc":"合成课程","jc":"1-2节","xqj":"1","zcd":"1周"}]}""",
+            0)
+        var leaves = 0
+        var confirms = 0
+        compose.setContent { MaterialTheme { OnlineImportPreviewScreen(state, {}, {},
+            onConfirm = { confirms++ }, onOpenSchedule = { leaves++ }) } }
+
+        compose.onNodeWithTag("preview_leave").performClick()
+        compose.runOnIdle {
+            assertEquals(1, leaves)
+            assertEquals(0, confirms)
+        }
+    }
+
+    @Test fun unknownCoverageRequiresMatchingOfficialCountBeforePreparingVerifiedPreview() {
+        val state = preview("""{"xsxx":{"XNM":"2026","XQM":"3","XNMC":"2026-2027","XQMMC":"1"},"sjkList":[],"kbList":[{"kcmc":"合成课程","jc":"1-2节","xqj":"1","zcd":"1周","xnm":"2026","xqm":"3"}]}""",
+            0)
+        var confirmedCount: Int? = null
+        compose.setContent { MaterialTheme { OnlineImportPreviewScreen(state, {}, {},
+            onConfirmFullCoverage = { confirmedCount = it }) } }
+
+        compose.onNodeWithTag("preview_confirm").assertIsNotEnabled()
+        compose.onNodeWithTag("preview_verify_full").performClick()
+        compose.onNodeWithTag("preview_verified_count").performTextReplacement("2")
+        compose.onNodeWithTag("preview_verify_confirm").assertIsNotEnabled()
+        compose.onNodeWithTag("preview_verified_count").performTextReplacement("1")
+        compose.onNodeWithTag("preview_verify_confirm").assertIsEnabled().performClick()
+        compose.runOnIdle { assertEquals(1, confirmedCount) }
+    }
+
+    @Test fun savedReceiptReturnsToLocalScheduleWithActualCountVisible() {
+        val ready = preview("""{"xsxx":{"XNM":"2026","XQM":"3"},"sjkList":[],"kbList":[{"kcmc":"合成课程","jc":"1-2节","xqj":"1","zcd":"1周"}]}""",
+            2, CompletenessStatus.VERIFIED_FULL)
+        val receipt = ImportReceipt("synthetic-batch", SourceScope("fjnu", "fjnu-zhengfang-web",
+            "xnm=2026;xqm=3"), 7, 2, 1)
+        var opens = 0
+        compose.setContent { MaterialTheme { OnlineImportPreviewScreen(
+            OnlineImportPreviewState.Saved(ready.summary, receipt), {}, {},
+            onOpenSchedule = { opens++ }) } }
+
+        compose.onNodeWithTag("preview_saved").assertTextContains("写入 1 条", substring = true)
+        compose.onNodeWithTag("preview_saved").assertTextContains("替换旧安排 2 条", substring = true)
+        compose.onNodeWithTag("preview_confirm").performClick()
+        compose.runOnIdle { assertEquals(1, opens) }
     }
 }

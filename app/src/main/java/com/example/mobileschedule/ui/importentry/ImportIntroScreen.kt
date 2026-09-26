@@ -58,7 +58,7 @@ fun ImportIntroScreen(
             verticalArrangement = Arrangement.spacedBy(14.dp)) {
             Text("福建师范大学 · 正方教务", style = MaterialTheme.typography.titleLarge)
             Text("导入时需由你在学校页面完成本人登录、选择来源学期，再预览课程安排并确认保存。")
-            Text("登录并读取后会展示课程安排预览和校验原因。无法确认完整学期时禁止保存；本阶段只预览、暂不保存，已保存的本地课程不会受影响。",
+            Text("登录并读取后会展示课程安排预览和校验原因。确认完整学期、核对替换范围后才可保存；取消或保存失败不会改变已有本地课程。",
                 modifier = Modifier.testTag("import_read_only"),
                 color = MaterialTheme.colorScheme.onSurfaceVariant)
             when (state) {
