@@ -21,7 +21,7 @@ import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import com.example.mobileschedule.R
 import com.example.mobileschedule.ui.importentry.ImportIntroRoute
-import com.example.mobileschedule.ui.importentry.ZhengfangOnlineReadScreen
+import com.example.mobileschedule.ui.importentry.ZhengfangOnlineReadRoute
 import com.example.mobileschedule.ui.schedule.ScheduleRoute
 import com.example.mobileschedule.ui.settings.SettingsConfigRoute
 import com.example.mobileschedule.ui.settings.SettingsRoute
@@ -81,7 +81,7 @@ fun MobileScheduleApp() {
             composable("import/login/{semesterId}") { loginEntry ->
                 val semesterId = loginEntry.arguments?.getString("semesterId")?.toLongOrNull()
                 if (semesterId != null) {
-                    ZhengfangOnlineReadScreen(semesterId, onExit = { navController.popBackStack() })
+                    ZhengfangOnlineReadRoute(semesterId, onExit = { navController.popBackStack() })
                 }
             }
             composable("config/new") {

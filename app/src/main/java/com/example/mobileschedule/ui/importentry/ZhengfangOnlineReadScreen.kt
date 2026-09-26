@@ -44,6 +44,8 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
+import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.mobileschedule.data.importer.ParsedZhengfangSchedule
 import com.example.mobileschedule.data.importer.ZhengfangOnlineRead
 import com.example.mobileschedule.data.importer.ZhengfangParseErrorCode
@@ -60,6 +62,19 @@ private sealed interface OnlineReadState {
     data class Ready(val selected: ZhengfangSourceTerm, val parsed: ParsedZhengfangSchedule) : OnlineReadState
 }
 
+@Composable
+fun ZhengfangOnlineReadRoute(
+    targetSemesterId: Long,
+    onExit: () -> Unit,
+    viewModel: OnlineImportPreviewViewModel = hiltViewModel(),
+) {
+    val previewState by viewModel.state.collectAsStateWithLifecycle()
+    ZhengfangOnlineReadScreen(targetSemesterId, onExit,
+        previewState = previewState,
+        onPreparePreview = viewModel::show,
+        onInvalidatePreview = viewModel::invalidate)
+}
+
 /** The user enters credentials only in the school WebView. No JavaScript bridge or database write exists here. */
 @SuppressLint("SetJavaScriptEnabled")
 @OptIn(ExperimentalMaterial3Api::class)
@@ -68,6 +83,9 @@ fun ZhengfangOnlineReadScreen(
     targetSemesterId: Long,
     onExit: () -> Unit,
     initialUrl: String = ZhengfangOnlineRead.LOGIN_URL,
+    previewState: OnlineImportPreviewState,
+    onPreparePreview: (ParsedZhengfangSchedule) -> Unit,
+    onInvalidatePreview: () -> Unit,
 ) {
     val context = LocalContext.current
     var yearText by remember { mutableStateOf("") }
@@ -77,6 +95,7 @@ fun ZhengfangOnlineReadScreen(
     var readState by remember { mutableStateOf<OnlineReadState>(OnlineReadState.Idle) }
     var generation by remember { mutableIntStateOf(0) }
     var pendingTerm by remember { mutableStateOf<ZhengfangSourceTerm?>(null) }
+    var showingPreview by remember { mutableStateOf(false) }
     val selected = ZhengfangOnlineRead.selectTerm(yearText, termNumber)
     val reading = readState == OnlineReadState.Reading
 
@@ -117,8 +136,10 @@ fun ZhengfangOnlineReadScreen(
                         val requestedTerm = pendingTerm
                         readState = if (body == null || requestedTerm == null) OnlineReadState.Failed("课表响应为空或无法读取，请重试。")
                         else try {
-                            OnlineReadState.Ready(requestedTerm,
-                                ZhengfangOnlineRead.parse(body, targetSemesterId, requestedTerm))
+                            val parsed = ZhengfangOnlineRead.parse(body, targetSemesterId, requestedTerm)
+                            onPreparePreview(parsed)
+                            showingPreview = true
+                            OnlineReadState.Ready(requestedTerm, parsed)
                         } catch (error: ZhengfangParseException) {
                             OnlineReadState.Failed(parseErrorMessage(error.diagnostic.code))
                         } catch (_: IllegalArgumentException) {
@@ -173,20 +194,33 @@ fun ZhengfangOnlineReadScreen(
     fun cancelRead() {
         generation++
         webView.stopLoading()
+        onInvalidatePreview()
         readState = OnlineReadState.Canceled
     }
     fun exit() {
         generation++
         webView.stopLoading()
+        onInvalidatePreview()
         CookieManager.getInstance().removeAllCookies(null)
         onExit()
     }
+    fun closePreview() {
+        onInvalidatePreview()
+        showingPreview = false
+        readState = OnlineReadState.Idle
+    }
     BackHandler {
         when {
+            showingPreview -> closePreview()
             reading -> cancelRead()
             webView.canGoBack() -> webView.goBack()
             else -> exit()
         }
+    }
+
+    if (showingPreview) {
+        OnlineImportPreviewScreen(previewState, onBack = ::closePreview, onReadAgain = ::closePreview)
+        return
     }
 
     Scaffold(modifier = Modifier.fillMaxSize().testTag("online_read_page"),
@@ -202,14 +236,26 @@ fun ZhengfangOnlineReadScreen(
                 style = MaterialTheme.typography.bodySmall)
             Text(if (pageUrl.isSchoolHost()) "当前为福建师大教务域名" else "当前为登录跳转页或尚未打开学校页面",
                 style = MaterialTheme.typography.labelSmall)
-            OutlinedTextField(value = yearText, onValueChange = { yearText = it },
+            OutlinedTextField(value = yearText, onValueChange = {
+                if (it != yearText) {
+                    onInvalidatePreview()
+                    readState = OnlineReadState.Idle
+                }
+                yearText = it
+            },
                 label = { Text("来源学年起始年份，例如 2026") }, singleLine = true,
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                 modifier = Modifier.fillMaxWidth().testTag("online_year"))
             Row {
                 listOf(1, 2).forEach { number ->
                     Row(modifier = Modifier.weight(1f)) {
-                        RadioButton(selected = termNumber == number, onClick = { termNumber = number },
+                        RadioButton(selected = termNumber == number, onClick = {
+                            if (termNumber != number) {
+                                onInvalidatePreview()
+                                readState = OnlineReadState.Idle
+                                termNumber = number
+                            }
+                        },
                             modifier = Modifier.testTag("online_term_$number"))
                         Text("第 $number 学期", modifier = Modifier.padding(top = 12.dp))
                     }
@@ -219,6 +265,7 @@ fun ZhengfangOnlineReadScreen(
                 Button(onClick = {
                     val sourceTerm = selected ?: return@Button
                     generation++
+                    onInvalidatePreview()
                     pendingTerm = sourceTerm
                     readState = OnlineReadState.Reading
                     webView.postUrl(ZhengfangOnlineRead.SCHEDULE_URL,

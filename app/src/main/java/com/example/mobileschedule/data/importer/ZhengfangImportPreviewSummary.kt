@@ -23,6 +23,8 @@ data class ZhengfangImportPreviewSummary(
     val arrangements: List<PreviewArrangement>,
     val issues: List<ImportIssue>,
     val canCommit: Boolean,
+    /** Sanitized parser errors retain their field names for an actionable preview message. */
+    val parseDiagnostics: List<ZhengfangParseDiagnostic>,
 ) {
     /** Candidate arrangements after validation and exact deduplication, even when saving is blocked. */
     val pendingSaveCount: Int get() = validCount
@@ -45,6 +47,6 @@ fun ParsedZhengfangSchedule.toPreviewSummary(preview: ImportPreview): ZhengfangI
         request.sourceTermId, request.sourceTermLabel, request.completeness,
         preview.scope, preview.replaceCount, preview.sourceObservedCount, parsedRowCount,
         preview.validCount, preview.duplicateCount, preview.errorCount,
-        preview.normalizedArrangements, preview.issues, preview.canCommit,
+        preview.normalizedArrangements, preview.issues, preview.canCommit, diagnostics,
     )
 }

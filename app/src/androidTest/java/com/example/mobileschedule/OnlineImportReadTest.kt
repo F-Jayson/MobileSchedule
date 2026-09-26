@@ -8,6 +8,7 @@ import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.performClick
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.example.mobileschedule.ui.importentry.ZhengfangOnlineReadScreen
+import com.example.mobileschedule.ui.importentry.OnlineImportPreviewState
 import org.junit.Assert.assertEquals
 import org.junit.Rule
 import org.junit.Test
@@ -21,7 +22,8 @@ class OnlineImportReadTest {
         var exits = 0
         compose.setContent { MaterialTheme {
             ZhengfangOnlineReadScreen(targetSemesterId = 7, onExit = { exits++ },
-                initialUrl = "about:blank")
+                initialUrl = "about:blank", previewState = OnlineImportPreviewState.Idle,
+                onPreparePreview = {}, onInvalidatePreview = {})
         } }
 
         compose.onNodeWithTag("online_read_page").assertIsDisplayed()
