@@ -37,7 +37,7 @@ class NavigationSmokeTest {
         compose.onNodeWithTag(if (initialTag == "week_grid") "schedule_import_top" else "schedule_import")
             .performClick()
         compose.onNodeWithTag("import_intro").assertIsDisplayed()
-        compose.onNodeWithTag("import_unavailable").assertIsDisplayed()
+        compose.onNodeWithTag("import_read_only").assertIsDisplayed()
         compose.onNodeWithTag("tab_schedule").assertDoesNotExist()
         if (firstRun) saveScreenshot("import-intro.png")
         compose.onNodeWithTag("import_back").performClick()

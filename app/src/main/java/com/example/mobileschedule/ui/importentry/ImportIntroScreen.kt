@@ -29,20 +29,23 @@ import com.example.mobileschedule.ui.settings.SettingsHomeViewModel
 fun ImportIntroRoute(
     onBack: () -> Unit,
     onConfigure: (Long?) -> Unit,
+    onContinue: (Long) -> Unit,
     viewModel: SettingsHomeViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     val activeId = (state as? SettingsHomeUiState.Ready)?.activeId
-    ImportIntroScreen(state, onBack, onConfigure = { onConfigure(activeId) })
+    ImportIntroScreen(state, onBack, onConfigure = { onConfigure(activeId) },
+        onContinue = { activeId?.let(onContinue) })
 }
 
-/** Stage 4 entry only. Stage 5 will add authenticated reading and preview behind this route. */
+/** Entry to the read-only online stage. Saving remains a separate, later confirmation flow. */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ImportIntroScreen(
     state: SettingsHomeUiState,
     onBack: () -> Unit,
     onConfigure: () -> Unit,
+    onContinue: () -> Unit,
 ) {
     Scaffold(modifier = Modifier.fillMaxSize().testTag("import_intro"),
         contentWindowInsets = WindowInsets(0),
@@ -55,8 +58,8 @@ fun ImportIntroScreen(
             verticalArrangement = Arrangement.spacedBy(14.dp)) {
             Text("福建师范大学 · 正方教务", style = MaterialTheme.typography.titleLarge)
             Text("导入时需由你在学校页面完成本人登录、选择来源学期，再预览课程安排并确认保存。")
-            Text("学校登录与课表读取尚未接入，当前不能开始在线导入。已保存的本地课程不会受此入口影响。",
-                modifier = Modifier.testTag("import_unavailable"),
+            Text("本阶段可在学校页面登录并读取课表；来源学期身份和完整学期覆盖尚未核实，读取后只展示结果，暂不保存。已保存的本地课程不会受影响。",
+                modifier = Modifier.testTag("import_read_only"),
                 color = MaterialTheme.colorScheme.onSurfaceVariant)
             when (state) {
                 SettingsHomeUiState.Loading -> {
@@ -67,6 +70,7 @@ fun ImportIntroScreen(
                     color = MaterialTheme.colorScheme.error)
                 is SettingsHomeUiState.Ready -> {
                     val active = state.semesters.firstOrNull { it.id == state.activeId }
+                    val canContinue = active?.config != null
                     Text(when {
                         active == null -> "尚无活动学期。请先配置本地学期。"
                         active.config == null -> "${active.displayName} 尚缺周次或节次配置。"
@@ -74,6 +78,10 @@ fun ImportIntroScreen(
                     }, modifier = Modifier.testTag("import_target"))
                     Button(onClick = onConfigure, modifier = Modifier.testTag("import_configure")) {
                         Text(if (active == null) "配置学期" else "检查学期配置")
+                    }
+                    Button(onClick = onContinue, enabled = canContinue,
+                        modifier = Modifier.testTag("import_continue")) {
+                        Text("开始学校登录与读取")
                     }
                 }
             }

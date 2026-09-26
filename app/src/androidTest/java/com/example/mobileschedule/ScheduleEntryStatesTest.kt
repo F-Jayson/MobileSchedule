@@ -6,6 +6,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.assertTextContains
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithTag
@@ -73,24 +74,29 @@ class ScheduleEntryStatesTest {
         assertEquals(1, import)
     }
 
-    @Test fun importIntroExplainsUnavailableOnlineStepAndReturnsToCaller() {
+    @Test fun importIntroOnlyEnablesSchoolReadAfterLocalConfiguration() {
         var back = 0
         var configure = 0
+        var continueCount = 0
         lateinit var update: (SettingsHomeUiState) -> Unit
         compose.setContent { MaterialTheme {
             var state by remember { mutableStateOf<SettingsHomeUiState>(SettingsHomeUiState.Ready(emptyList(), null)) }
             update = { state = it }
             ImportIntroScreen(state,
-                onBack = { back++ }, onConfigure = { configure++ })
+                onBack = { back++ }, onConfigure = { configure++ },
+                onContinue = { continueCount++ })
         } }
         compose.onNodeWithTag("import_intro").assertIsDisplayed()
-        compose.onNodeWithTag("import_unavailable").assertTextContains("尚未接入", substring = true)
+        compose.onNodeWithTag("import_read_only").assertTextContains("暂不保存", substring = true)
+        compose.onNodeWithTag("import_continue").assertIsNotEnabled()
         compose.onNodeWithTag("import_configure").performClick()
         val semester = Semester(1, "合成学期", emptySet(), SemesterConfig(monday, 2, 2, emptyList(), 1))
         compose.runOnIdle { update(SettingsHomeUiState.Ready(listOf(semester), 1)) }
         compose.onNodeWithTag("import_target").assertTextContains("本地目标学期：合成学期", substring = true)
+        compose.onNodeWithTag("import_continue").performClick()
         compose.onNodeWithTag("import_back").performClick()
         assertEquals(1, configure)
+        assertEquals(1, continueCount)
         assertEquals(1, back)
     }
 
