@@ -87,7 +87,7 @@ class ScheduleEntryStatesTest {
                 onContinue = { continueCount++ })
         } }
         compose.onNodeWithTag("import_intro").assertIsDisplayed()
-        compose.onNodeWithTag("import_read_only").assertTextContains("暂不保存", substring = true)
+        compose.onNodeWithTag("import_read_only").assertTextContains("核对替换范围后才可保存", substring = true)
         compose.onNodeWithTag("import_continue").assertIsNotEnabled()
         compose.onNodeWithTag("import_configure").performClick()
         val semester = Semester(1, "合成学期", emptySet(), SemesterConfig(monday, 2, 2, emptyList(), 1))

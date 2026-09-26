@@ -11,6 +11,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
@@ -25,10 +26,13 @@ private val detailWeekdays = listOf("周一", "周二", "周三", "周四", "周
 @Composable
 internal fun CourseDetailSheet(state: CourseDetailUiState, onDismiss: () -> Unit) {
     if (state == CourseDetailUiState.Closed) return
-    ModalBottomSheet(onDismissRequest = onDismiss, modifier = Modifier.testTag("course_detail")) {
-        Column(Modifier.fillMaxWidth().heightIn(max = 600.dp).verticalScroll(rememberScrollState())
-            .padding(start = 24.dp, end = 24.dp, bottom = 24.dp)) {
-            when (state) {
+    ModalBottomSheet(onDismissRequest = onDismiss,
+        sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
+        modifier = Modifier.testTag("course_detail")) {
+        Column(Modifier.fillMaxWidth().heightIn(max = 600.dp)) {
+            Column(Modifier.weight(1f, fill = false).verticalScroll(rememberScrollState())
+                .padding(start = 24.dp, end = 24.dp)) {
+                when (state) {
                 CourseDetailUiState.Closed -> Unit
                 CourseDetailUiState.Loading -> Text("正在读取课程详情…", modifier = Modifier.testTag("detail_loading"))
                 CourseDetailUiState.Missing -> Text("这条课程安排已不存在，可能已被重新导入的课表替换。",
@@ -46,7 +50,13 @@ internal fun CourseDetailSheet(state: CourseDetailUiState, onDismiss: () -> Unit
                     DetailLine("节次：第${course.startSection}–${course.endSection}节", "detail_sections")
                     val time = if (detail.startTime != null && detail.endTime != null) {
                         "${detail.startTime.format(detailTimeFormat)}–${detail.endTime.format(detailTimeFormat)}"
-                    } else "未配置节次时间"
+                    } else {
+                        val first = ScheduleDisplayDefaults.forUnconfiguredSection(course.startSection)
+                        val last = ScheduleDisplayDefaults.forUnconfiguredSection(course.endSection)
+                        if (first != null && last != null)
+                            "${first.start.format(detailTimeFormat)}–${last.end.format(detailTimeFormat)}（默认节次时间）"
+                        else "未配置节次时间"
+                    }
                     DetailLine("时间：$time", "detail_time")
                     DetailLine("周次：${course.weeks.sorted().joinToString("、")}", "detail_weeks")
                     DetailLine("本地学期：${detail.semesterDisplayName}", "detail_semester")
@@ -61,8 +71,10 @@ internal fun CourseDetailSheet(state: CourseDetailUiState, onDismiss: () -> Unit
                         CourseOrigin.Legacy -> DetailLine("来源：历史课程", "detail_source")
                     }
                 }
+                }
             }
-            TextButton(onClick = onDismiss, modifier = Modifier.testTag("detail_close")) { Text("关闭") }
+            TextButton(onClick = onDismiss, modifier = Modifier.padding(start = 16.dp, bottom = 16.dp)
+                .testTag("detail_close")) { Text("关闭") }
         }
     }
 }

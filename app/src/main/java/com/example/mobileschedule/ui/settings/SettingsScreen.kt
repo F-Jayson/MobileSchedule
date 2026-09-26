@@ -65,7 +65,8 @@ fun SettingsHomeScreen(
                                 val config = semester.config
                                 Text(if (config == null) "尚未配置周次和节次" else
                                     "第1周周一 ${config.firstWeekMonday} · ${config.totalWeeks}周 · ${config.totalSections}节")
-                                Text(if (config?.sectionTimes.isNullOrEmpty()) "节次时间未配置" else "已配置每节起止时间")
+                                Text(if (config?.sectionTimes.isNullOrEmpty())
+                                    "未单独配置时间；课表显示第1–8节默认时间" else "已配置每节起止时间")
                                 Column {
                                     TextButton(onClick = { onEdit(semester.id) },
                                         modifier = Modifier.testTag("settings_edit_${semester.id}")) { Text("编辑配置") }

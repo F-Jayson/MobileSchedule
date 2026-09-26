@@ -25,6 +25,7 @@ import androidx.compose.ui.test.onAllNodesWithTag
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performTouchInput
 import androidx.compose.ui.test.swipeLeft
+import androidx.compose.ui.test.swipeRight
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import com.example.mobileschedule.data.model.*
@@ -44,6 +45,16 @@ class ScheduleInteractionTest {
     @get:Rule val compose = createComposeRule()
     private val monday = LocalDate.of(2026, 9, 21)
 
+    @Test fun scheduleOffersBottomEntryToDisplaySettings() {
+        var openings = 0
+        compose.setContent { TestScreenHost {
+            ScheduleScreen(state(1, WeekPosition.InSemester(1)),
+                onDisplaySettings = { openings++ })
+        } }
+        compose.onNodeWithTag("schedule_display_settings").performClick()
+        assertEquals(1, openings)
+    }
+
     @Test fun buttonsAndWeekPickerRespectBoundsAndReturnToRealWeek() {
         compose.setContent {
             var browsing by remember { mutableIntStateOf(2) }
@@ -57,20 +68,27 @@ class ScheduleInteractionTest {
                 )
             }
         }
-        compose.onNodeWithTag("week_title").assertTextContains("第2周", substring = true)
+        compose.onNodeWithTag("week_title").assertTextContains("2", substring = true)
+        val weekTitle = compose.onNodeWithTag("week_title").fetchSemanticsNode().boundsInRoot
+        val firstDay = compose.onNodeWithTag("day_1").fetchSemanticsNode().boundsInRoot
+        assertTrue("week picker belongs in the grid's top-left header", kotlin.math.abs(weekTitle.top - firstDay.top) < 20f)
         compose.onNodeWithTag("previous_week").performClick()
-        compose.onNodeWithTag("week_title").assertTextContains("第1周", substring = true)
+        compose.onNodeWithTag("week_title").assertTextContains("1", substring = true)
         compose.onNodeWithTag("previous_week").assertIsNotEnabled()
         compose.onNodeWithTag("return_to_current").performClick()
-        compose.onNodeWithTag("week_title").assertTextContains("第2周", substring = true)
+        compose.onNodeWithTag("week_title").assertTextContains("2", substring = true)
+        val previous = compose.onNodeWithTag("previous_week").fetchSemanticsNode().boundsInRoot
+        val current = compose.onNodeWithTag("return_to_current").fetchSemanticsNode().boundsInRoot
+        val next = compose.onNodeWithTag("next_week").fetchSemanticsNode().boundsInRoot
+        assertTrue("return-to-current belongs between previous and next", previous.right <= current.left && current.right <= next.left)
         compose.onNodeWithTag("week_title").performClick()
         compose.onNodeWithTag("week_picker").assertIsDisplayed()
         compose.onNodeWithTag("week_option_3").performClick()
-        compose.onNodeWithTag("week_title").assertTextContains("第3周", substring = true)
+        compose.onNodeWithTag("week_title").assertTextContains("3", substring = true)
         compose.onNodeWithTag("next_week").assertIsNotEnabled()
     }
 
-    @Test fun onlyTopBarSwipeChangesWeekAndOutsideSemesterHasNoFalseCurrentWeek() {
+    @Test fun gridSwipeChangesWeekAndOutsideSemesterHasNoFalseCurrentWeek() {
         compose.setContent {
             var browsing by remember { mutableIntStateOf(1) }
             TestScreenHost {
@@ -86,11 +104,12 @@ class ScheduleInteractionTest {
         compose.onNodeWithTag("semester_boundary").assertTextContains("学期尚未开始", substring = true)
         assertTrue(compose.onAllNodesWithTag("return_to_current").fetchSemanticsNodes().isEmpty())
         compose.onNodeWithTag("week_body_scroll").performTouchInput { swipeLeft() }
-        compose.onNodeWithTag("week_title").assertTextContains("第1周", substring = true)
-        compose.onNodeWithTag("week_switch_bar").performTouchInput { swipeLeft() }
-        compose.onNodeWithTag("week_title").assertTextContains("第2周", substring = true)
+        compose.onNodeWithTag("week_title").assertTextContains("2", substring = true)
+        compose.onNodeWithTag("week_body_scroll").performTouchInput { swipeRight() }
+        compose.onNodeWithTag("week_title").assertTextContains("1", substring = true)
+        compose.onNodeWithTag("week_body_scroll").performTouchInput { swipeLeft() }
         compose.onNodeWithTag("return_to_boundary").performClick()
-        compose.onNodeWithTag("week_title").assertTextContains("第1周", substring = true)
+        compose.onNodeWithTag("week_title").assertTextContains("1", substring = true)
     }
 
     @Test fun conflictListOpensEveryFullDetailAndMissingCourseIsExplained() {
@@ -125,9 +144,7 @@ class ScheduleInteractionTest {
         compose.onNodeWithTag("overlap_2_3").performClick()
         compose.onNodeWithTag("conflict_course_8").performClick()
         compose.onNodeWithTag("detail_name").assertTextContains("软件工程乙", substring = true)
-        compose.waitUntil(timeoutMillis = 10_000) {
-            runCatching { compose.onNodeWithTag("detail_close").assertIsDisplayed() }.isSuccess
-        }
+        compose.onNodeWithTag("detail_close").assertIsDisplayed()
         compose.mainClock.advanceTimeBy(500)
         saveScreenshot("week-detail-fixture.png")
     }
@@ -150,7 +167,7 @@ class ScheduleInteractionTest {
         compose.onNodeWithTag("detail_missing").assertTextContains("已不存在", substring = true)
         compose.onNodeWithTag("detail_close").performClick()
         compose.onNodeWithTag("course_9").performClick()
-        compose.onNodeWithTag("detail_time").assertTextContains("未配置节次时间", substring = true)
+        compose.onNodeWithTag("detail_time").assertTextContains("08:20–09:05", substring = true)
         compose.onNodeWithTag("detail_source").assertTextContains("手动课程", substring = true)
         compose.onNodeWithTag("detail_teacher").assertTextContains("未提供", substring = true)
     }

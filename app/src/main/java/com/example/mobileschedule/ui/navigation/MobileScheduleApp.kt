@@ -23,6 +23,7 @@ import com.example.mobileschedule.R
 import com.example.mobileschedule.ui.importentry.ImportIntroRoute
 import com.example.mobileschedule.ui.importentry.ZhengfangOnlineReadRoute
 import com.example.mobileschedule.ui.schedule.ScheduleRoute
+import com.example.mobileschedule.ui.schedule.ScheduleDisplaySettingsRoute
 import com.example.mobileschedule.ui.settings.SettingsConfigRoute
 import com.example.mobileschedule.ui.settings.SettingsRoute
 
@@ -66,7 +67,11 @@ fun MobileScheduleApp() {
             composable(Destination.SCHEDULE.route) {
                 ScheduleRoute(onConfigure = { navController.navigate("config/new") },
                     onSettings = { navController.navigate(Destination.SETTINGS.route) },
+                    onDisplaySettings = { navController.navigate("schedule/display-settings") },
                     onImport = { navController.navigate("import") })
+            }
+            composable("schedule/display-settings") {
+                ScheduleDisplaySettingsRoute(onBack = { navController.popBackStack() })
             }
             composable(Destination.SETTINGS.route) {
                 SettingsRoute(onCreate = { navController.navigate("config/new") },

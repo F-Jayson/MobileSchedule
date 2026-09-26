@@ -3,7 +3,7 @@ package com.example.mobileschedule.ui.schedule
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
@@ -35,7 +35,9 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
@@ -44,6 +46,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -56,7 +59,7 @@ import java.time.temporal.ChronoUnit
 
 private val timeFormat = DateTimeFormatter.ofPattern("HH:mm")
 private val weekdays = listOf("周一", "周二", "周三", "周四", "周五", "周六", "周日")
-private val sectionWidth = 52.dp
+private val sectionWidth = 40.dp
 private val sectionHeight = 72.dp
 
 @Composable
@@ -64,14 +67,22 @@ fun ScheduleRoute(
     onConfigure: () -> Unit,
     onSettings: () -> Unit,
     onImport: () -> Unit,
+    onDisplaySettings: () -> Unit,
     viewModel: ScheduleViewModel = hiltViewModel(),
 ) {
+    val context = LocalContext.current
+    val displayStore = remember(context) { ScheduleDisplaySettingsStore(context) }
+    var displayOptions by remember(displayStore) { mutableStateOf(displayStore.read()) }
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     val detailState by viewModel.detailState.collectAsStateWithLifecycle()
-    LifecycleEventEffect(Lifecycle.Event.ON_RESUME) { viewModel.refreshToday() }
+    LifecycleEventEffect(Lifecycle.Event.ON_RESUME) {
+        viewModel.refreshToday()
+        displayOptions = displayStore.read()
+    }
     ScheduleScreen(
         state = state,
         detailState = detailState,
+        displayOptions = displayOptions,
         onPreviousWeek = viewModel::previousWeek,
         onNextWeek = viewModel::nextWeek,
         onSelectWeek = viewModel::selectWeek,
@@ -81,6 +92,7 @@ fun ScheduleRoute(
         onConfigure = onConfigure,
         onSettings = onSettings,
         onImport = onImport,
+        onDisplaySettings = onDisplaySettings,
         onRetry = viewModel::retry,
     )
 }
@@ -89,6 +101,7 @@ fun ScheduleRoute(
 fun ScheduleScreen(
     state: ScheduleUiState,
     detailState: CourseDetailUiState = CourseDetailUiState.Closed,
+    displayOptions: ScheduleDisplayOptions = ScheduleDisplayOptions(),
     onPreviousWeek: () -> Unit = {},
     onNextWeek: () -> Unit = {},
     onSelectWeek: (Int) -> Unit = {},
@@ -98,6 +111,7 @@ fun ScheduleScreen(
     onConfigure: () -> Unit = {},
     onSettings: () -> Unit = {},
     onImport: () -> Unit = {},
+    onDisplaySettings: () -> Unit = {},
     onRetry: () -> Unit = {},
 ) {
     when (state) {
@@ -128,21 +142,32 @@ fun ScheduleScreen(
             onPrimary = onRetry, secondaryLabel = "打开设置", secondaryTag = "schedule_settings",
             onSecondary = onSettings,
         )
-        is ScheduleUiState.Ready -> Column(Modifier.fillMaxSize()) {
-            ScheduleWeekControls(state, onPreviousWeek, onNextWeek, onSelectWeek, onReturnToCurrentWeek, onImport)
-            if (state.week.schedule.arrangements.isEmpty()) {
-                Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp),
-                    verticalAlignment = Alignment.CenterVertically) {
-                    Text("本周没有课程安排", modifier = Modifier.weight(1f).testTag("schedule_week_empty"),
-                        style = MaterialTheme.typography.bodyMedium)
-                    TextButton(onClick = onImport, modifier = Modifier.testTag("schedule_import")) {
-                        Text("导入课表")
+        is ScheduleUiState.Ready -> {
+            var showWeekPicker by remember { mutableStateOf(false) }
+            Column(Modifier.fillMaxSize()) {
+                ScheduleWeekControls(state, onPreviousWeek, onNextWeek, onReturnToCurrentWeek, onImport)
+                if (state.week.schedule.arrangements.isEmpty()) {
+                    Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp),
+                        verticalAlignment = Alignment.CenterVertically) {
+                        Text("本周没有课程安排", modifier = Modifier.weight(1f).testTag("schedule_week_empty"),
+                            style = MaterialTheme.typography.bodySmall)
+                        TextButton(onClick = onImport, modifier = Modifier.testTag("schedule_import")) {
+                            Text("导入课表", style = MaterialTheme.typography.labelMedium)
+                        }
                     }
                 }
+                Box(Modifier.weight(1f)) {
+                    WeekScheduleGrid(state.week, state.today, onCourseClick,
+                        displayOptions = displayOptions,
+                        onWeekTitleClick = { showWeekPicker = true },
+                        onPreviousWeek = onPreviousWeek, onNextWeek = onNextWeek)
+                }
+                TextButton(onClick = onDisplaySettings,
+                    modifier = Modifier.fillMaxWidth().testTag("schedule_display_settings")) {
+                    Text("课表设置", style = MaterialTheme.typography.labelMedium)
+                }
             }
-            Box(Modifier.weight(1f)) {
-                WeekScheduleGrid(state.week, state.today, onCourseClick)
-            }
+            if (showWeekPicker) WeekPickerDialog(state, onSelectWeek) { showWeekPicker = false }
         }
     }
     CourseDetailSheet(detailState, onDismissDetail)
@@ -163,55 +188,83 @@ private fun ScheduleStatusPage(
     }
 }
 
-/** Header and cards share one horizontal position; the left section ruler stays visible. */
+/** All seven days share the available width; horizontal drags change weeks, vertical drags scroll sections. */
 @Composable
 fun WeekScheduleGrid(
     week: ActiveWeek,
     today: LocalDate = LocalDate.now(),
     onCourseClick: (Long) -> Unit = {},
+    displayOptions: ScheduleDisplayOptions = ScheduleDisplayOptions(),
+    onWeekTitleClick: () -> Unit = {},
+    onPreviousWeek: () -> Unit = {},
+    onNextWeek: () -> Unit = {},
 ) {
     val config = requireNotNull(week.semester.config)
     val schedule = week.schedule
     val fontScale = LocalDensity.current.fontScale.coerceIn(1f, 1.8f)
     val rowHeight = sectionHeight * fontScale
-    val rulerWidth = sectionWidth * fontScale
-    val horizontal = rememberScrollState()
+    val rulerWidth = (sectionWidth * fontScale.coerceAtMost(1.15f)).coerceAtMost(46.dp)
     val vertical = rememberScrollState()
+    val swipeThresholdPx = with(LocalDensity.current) { 64.dp.toPx() }
     val todayIndex = ChronoUnit.DAYS.between(schedule.monday, today).toInt().takeIf { it in 0..6 }
     var overlappingCourses by remember { mutableStateOf<List<com.example.mobileschedule.data.model.CourseArrangement>?>(null) }
 
-    Column(Modifier.fillMaxSize().testTag("week_grid")) {
+    Column(Modifier.fillMaxSize().testTag("week_grid")
+        .pointerInput(schedule.week, config.totalWeeks, onPreviousWeek, onNextWeek) {
+            var dragDistance = 0f
+            detectHorizontalDragGestures(
+                onDragStart = { dragDistance = 0f },
+                onDragEnd = {
+                    if (dragDistance >= swipeThresholdPx && schedule.week > 1) onPreviousWeek()
+                    if (dragDistance <= -swipeThresholdPx && schedule.week < config.totalWeeks) onNextWeek()
+                    dragDistance = 0f
+                },
+                onDragCancel = { dragDistance = 0f },
+                onHorizontalDrag = { change, amount -> dragDistance += amount; change.consume() },
+            )
+        }) {
         BoxWithConstraints(Modifier.fillMaxSize()) {
-            val dayWidth = maxOf(96.dp, (maxWidth - rulerWidth) / 7)
+            val dayWidth = (maxWidth - rulerWidth) / 7
             val gridWidth = dayWidth * 7
             val gridHeight = rowHeight * config.totalSections
+            val compactHeader = dayWidth < 45.dp || fontScale > 1.3f
             Column(Modifier.fillMaxSize()) {
-                Row(Modifier.fillMaxWidth().height(54.dp * fontScale)) {
-                    Text("节次\n时间", Modifier.width(rulerWidth).padding(top = 6.dp),
-                        textAlign = TextAlign.Center, style = MaterialTheme.typography.labelSmall)
-                    Row(Modifier.weight(1f).horizontalScroll(horizontal).testTag("week_header_scroll")) {
+                Row(Modifier.fillMaxWidth().height((48.dp * fontScale).coerceAtMost(82.dp))) {
+                    TextButton(onClick = onWeekTitleClick,
+                        modifier = Modifier.width(rulerWidth).testTag("week_title")) {
+                        Text("${schedule.week}\n周", textAlign = TextAlign.Center,
+                            style = MaterialTheme.typography.labelSmall.copy(fontSize = 11.sp))
+                    }
+                    Row(Modifier.weight(1f).testTag("week_header")) {
                         weekdays.forEachIndexed { index, day ->
                             val date = schedule.monday.plusDays(index.toLong())
-                            Text("$day\n${date.monthValue}/${date.dayOfMonth}",
+                            val label = if (compactHeader) day.removePrefix("周") else day
+                            val dateLabel = if (compactHeader) "${date.dayOfMonth}"
+                                else "%02d-%02d".format(date.monthValue, date.dayOfMonth)
+                            Text("$label\n$dateLabel",
                                 Modifier.width(dayWidth)
                                     .background(if (todayIndex == index) MaterialTheme.colorScheme.primaryContainer else Color.Transparent)
                                     .padding(top = 6.dp).testTag("day_${index + 1}"),
-                                textAlign = TextAlign.Center, style = MaterialTheme.typography.labelMedium)
+                                textAlign = TextAlign.Center, maxLines = 2,
+                                style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp))
                         }
                     }
                 }
                 Row(Modifier.fillMaxWidth().weight(1f).verticalScroll(vertical)) {
                     Column(Modifier.width(rulerWidth)) {
                         repeat(config.totalSections) { index ->
-                            val start = config.sectionTimes.firstOrNull { it.section == index + 1 }?.start
+                            val interval = ScheduleDisplayDefaults.forSection(config, index + 1)
                             Column(Modifier.height(rowHeight).fillMaxWidth().padding(top = 5.dp),
                                 horizontalAlignment = Alignment.CenterHorizontally) {
-                                Text("${index + 1}", style = MaterialTheme.typography.labelLarge)
-                                Text(start?.format(timeFormat) ?: "—", style = MaterialTheme.typography.labelSmall)
+                                Text("${index + 1}", style = MaterialTheme.typography.labelMedium.copy(fontSize = 11.sp))
+                                Text(interval?.let { "${it.start.format(timeFormat)}\n${it.end.format(timeFormat)}" } ?: "—",
+                                    modifier = Modifier.testTag("section_time_${index + 1}"),
+                                    textAlign = TextAlign.Center,
+                                    style = MaterialTheme.typography.labelSmall.copy(fontSize = 9.sp))
                             }
                         }
                     }
-                    Box(Modifier.weight(1f).horizontalScroll(horizontal).testTag("week_body_scroll")) {
+                    Box(Modifier.weight(1f).testTag("week_body_scroll")) {
                         Box(Modifier.width(gridWidth).height(gridHeight)) {
                             WeekGridLines(gridWidth, gridHeight, dayWidth, rowHeight, config.totalSections, todayIndex)
                             buildWeekGridSlots(schedule.arrangements).forEach { slot ->
@@ -223,11 +276,13 @@ fun WeekScheduleGrid(
                                             rowHeight = rowHeight,
                                             lane = lane,
                                             laneCount = 2,
+                                            displayOptions = displayOptions,
                                             onClick = { onCourseClick(course.id) },
                                         )
                                     }
                                 } else {
-                                    WeekGridCard(slot = slot, dayWidth = dayWidth, rowHeight = rowHeight, onClick = {
+                                    WeekGridCard(slot = slot, dayWidth = dayWidth, rowHeight = rowHeight,
+                                        displayOptions = displayOptions, onClick = {
                                         val course = slot.arrangements.singleOrNull()
                                         if (course != null) onCourseClick(course.id)
                                         else overlappingCourses = slot.arrangements
@@ -283,36 +338,45 @@ private fun WeekGridLines(gridWidth: Dp, gridHeight: Dp, dayWidth: Dp, rowHeight
 
 @Composable
 private fun WeekGridCard(slot: WeekGridSlot, dayWidth: Dp, rowHeight: Dp, onClick: () -> Unit,
-    lane: Int = 0, laneCount: Int = 1) {
+    lane: Int = 0, laneCount: Int = 1,
+    displayOptions: ScheduleDisplayOptions = ScheduleDisplayOptions()) {
     val course = slot.arrangements.singleOrNull()
     val tag = if (course != null) "course_${course.id}" else "overlap_${slot.dayOfWeek}_${slot.startSection}"
     val description = if (course == null) {
         "${weekdays[slot.dayOfWeek - 1]}，第${slot.startSection}至${slot.endSection}节，同一时段${slot.arrangements.size}门课程，点击查看列表"
-    } else {
-        "${weekdays[slot.dayOfWeek - 1]}，第${slot.startSection}至${slot.endSection}节，${course.name}，${course.location ?: "地点未提供"}"
-    }
+    } else buildList {
+        add("${weekdays[slot.dayOfWeek - 1]}，第${slot.startSection}至${slot.endSection}节，${course.name}")
+        if (displayOptions.showLocation) add(course.location ?: "地点未提供")
+        if (displayOptions.showTeacher) add(course.teacher ?: "教师未提供")
+    }.joinToString("，")
     Card(
         modifier = Modifier
-            .offset(x = dayWidth * (slot.dayOfWeek - 1) + dayWidth / laneCount * lane + 3.dp,
+            .offset(x = dayWidth * (slot.dayOfWeek - 1) + dayWidth / laneCount * lane + 2.dp,
                 y = rowHeight * (slot.startSection - 1) + 3.dp)
-            .width(dayWidth / laneCount - 6.dp)
+            .width(dayWidth / laneCount - 4.dp)
             .height(rowHeight * slot.sectionSpan - 6.dp)
             .testTag(tag)
             .clickable(onClick = onClick)
             .semantics(mergeDescendants = true) { contentDescription = description },
     ) {
-        Column(Modifier.fillMaxSize().padding(5.dp)) {
+        Column(Modifier.fillMaxSize().padding(3.dp)) {
             if (course == null) {
                 Text("此时段有${slot.arrangements.size}门课程", maxLines = 2,
-                    overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.labelMedium)
-                Text("点击查看", style = MaterialTheme.typography.labelSmall)
+                    overflow = TextOverflow.Ellipsis,
+                    style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp))
+                Text("点击查看", style = MaterialTheme.typography.labelSmall.copy(fontSize = 9.sp))
             } else {
                 Text(course.name, maxLines = 3, overflow = TextOverflow.Ellipsis,
-                    style = MaterialTheme.typography.labelMedium)
-                Text(course.location ?: "地点未提供", maxLines = 1,
-                    overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.labelSmall)
+                    style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp))
+                if (displayOptions.showLocation) Text(course.location ?: "地点未提供", maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
+                    style = MaterialTheme.typography.labelSmall.copy(fontSize = 9.sp))
+                if (displayOptions.showTeacher) Text(course.teacher ?: "教师未提供", maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    style = MaterialTheme.typography.labelSmall.copy(fontSize = 9.sp))
                 if (laneCount > 1) Text("时间重叠", maxLines = 1,
-                    overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.labelSmall)
+                    overflow = TextOverflow.Ellipsis,
+                    style = MaterialTheme.typography.labelSmall.copy(fontSize = 9.sp))
             }
         }
     }
