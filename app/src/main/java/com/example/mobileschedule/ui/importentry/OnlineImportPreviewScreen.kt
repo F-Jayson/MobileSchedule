@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
@@ -18,6 +19,11 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.semantics
@@ -39,23 +45,72 @@ fun OnlineImportPreviewScreen(
     state: OnlineImportPreviewState,
     onBack: () -> Unit,
     onReadAgain: () -> Unit,
+    onConfirm: () -> Unit = {},
+    onOpenSchedule: () -> Unit = {},
 ) {
+    var confirmationOpen by remember { mutableStateOf(false) }
+    LaunchedEffect(state) {
+        if (state !is OnlineImportPreviewState.Ready && state !is OnlineImportPreviewState.SaveFailed)
+            confirmationOpen = false
+    }
+    val summary = when (state) {
+        is OnlineImportPreviewState.Ready -> state.summary
+        is OnlineImportPreviewState.Saving -> state.summary
+        is OnlineImportPreviewState.Saved -> state.summary
+        is OnlineImportPreviewState.SaveFailed -> state.summary
+        else -> null
+    }
+    val canAskConfirmation = when (state) {
+        is OnlineImportPreviewState.Ready -> state.summary.canCommit
+        is OnlineImportPreviewState.SaveFailed -> state.retryable && state.summary.canCommit
+        else -> false
+    }
+    if (confirmationOpen && canAskConfirmation && summary?.replacementScope != null &&
+        summary.replaceCount != null) {
+        AlertDialog(onDismissRequest = { confirmationOpen = false },
+            title = { Text("确认替换并保存课表") },
+            text = { Text("学校：福建师范大学\n来源学期：${summary.sourceTermLabel ?: summary.sourceTermId} " +
+                "（${summary.replacementScope.sourceTermId}）\n将替换此学校、此来源学期已有的 " +
+                "${summary.replaceCount} 条课程安排，并保存 ${summary.pendingSaveCount} 条；" +
+                "其他来源和学期不受影响。") },
+            confirmButton = { TextButton(onClick = {
+                confirmationOpen = false
+                onConfirm()
+            }, modifier = Modifier.testTag("preview_dialog_confirm")) { Text("确认替换并保存") } },
+            dismissButton = { TextButton(onClick = { confirmationOpen = false },
+                modifier = Modifier.testTag("preview_dialog_cancel")) { Text("取消") } },
+            modifier = Modifier.testTag("preview_confirm_dialog"))
+    }
     Scaffold(modifier = Modifier.fillMaxSize().testTag("online_import_preview"),
         contentWindowInsets = WindowInsets(0),
         topBar = { TopAppBar(title = { Text("导入预览") }, windowInsets = WindowInsets(0),
-            navigationIcon = { TextButton(onClick = onBack, modifier = Modifier.testTag("preview_back")) {
-                Text("返回")
+            navigationIcon = { TextButton(onClick = if (state is OnlineImportPreviewState.Saved)
+                onOpenSchedule else onBack, enabled = state !is OnlineImportPreviewState.Saving,
+                modifier = Modifier.testTag("preview_back")) {
+                Text(if (state is OnlineImportPreviewState.Saved) "完成" else "返回")
             } }) },
         bottomBar = {
-            if (state is OnlineImportPreviewState.Ready) {
+            if (summary != null) {
                 Column(Modifier.fillMaxWidth().padding(12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                    Text(if (state.summary.canCommit) "预览校验通过；确认保存将在后续任务接入。"
-                        else "校验未通过，不能确认保存。旧课表保持不变。",
+                    Text(when (state) {
+                        is OnlineImportPreviewState.Saving -> "正在事务保存，请勿重复操作。"
+                        is OnlineImportPreviewState.Saved -> "已保存 ${state.receipt.savedCount} 条课程安排。"
+                        is OnlineImportPreviewState.SaveFailed -> state.message
+                        else -> if (summary.canCommit) "校验通过，请核对替换范围后确认保存。"
+                            else "校验未通过，不能确认保存。旧课表保持不变。"
+                    },
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    Button(onClick = {}, enabled = false,
+                    Button(onClick = when (state) {
+                        is OnlineImportPreviewState.Saved -> onOpenSchedule
+                        else -> { { confirmationOpen = true } }
+                    }, enabled = canAskConfirmation || state is OnlineImportPreviewState.Saved,
                         modifier = Modifier.fillMaxWidth().testTag("preview_confirm")) {
-                        Text("确认保存 ${state.summary.pendingSaveCount} 条课程安排")
+                        Text(when (state) {
+                            is OnlineImportPreviewState.Saved -> "查看周课表"
+                            is OnlineImportPreviewState.SaveFailed -> "再次确认保存 ${summary.pendingSaveCount} 条课程安排"
+                            else -> "确认保存 ${summary.pendingSaveCount} 条课程安排"
+                        })
                     }
                 }
             }
@@ -74,8 +129,33 @@ fun OnlineImportPreviewScreen(
                         modifier = Modifier.testTag("preview_error"))
                     TextButton(onClick = onReadAgain) { Text("返回重新读取") }
                 }
-                is OnlineImportPreviewState.Ready -> {
-                    val summary = state.summary
+                is OnlineImportPreviewState.Saving -> {
+                    CircularProgressIndicator(modifier = Modifier.testTag("preview_saving"))
+                    Text("正在保存课程安排并更新活动学期…")
+                    PreviewSummaryContent(state.summary, onReadAgain = null)
+                }
+                is OnlineImportPreviewState.Saved -> {
+                    Text("保存成功：写入 ${state.receipt.savedCount} 条课程安排，" +
+                        "替换旧安排 ${state.receipt.removedCount} 条。",
+                        modifier = Modifier.testTag("preview_saved"),
+                        color = MaterialTheme.colorScheme.primary)
+                    state.activationError?.let { Text(it, color = MaterialTheme.colorScheme.error,
+                        modifier = Modifier.testTag("preview_activation_error")) }
+                    PreviewSummaryContent(state.summary, onReadAgain = null)
+                }
+                is OnlineImportPreviewState.SaveFailed -> {
+                    Text(state.message, color = MaterialTheme.colorScheme.error,
+                        modifier = Modifier.testTag("preview_save_error"))
+                    PreviewSummaryContent(state.summary, onReadAgain)
+                }
+                is OnlineImportPreviewState.Ready -> PreviewSummaryContent(state.summary, onReadAgain)
+            }
+        }
+    }
+}
+
+@Composable
+private fun PreviewSummaryContent(summary: ZhengfangImportPreviewSummary, onReadAgain: (() -> Unit)?) {
                     Text("福建师范大学 · 正方教务", modifier = Modifier.testTag("preview_school"),
                         style = MaterialTheme.typography.titleMedium)
                     Text("来源学期：${summary.sourceTermLabel ?: "未确认"}" +
@@ -102,13 +182,10 @@ fun OnlineImportPreviewScreen(
                     Text("课程安排列表（${summary.arrangements.size}）", style = MaterialTheme.typography.titleSmall)
                     if (summary.arrangements.isEmpty()) Text("没有可预览的有效课程安排。")
                     summary.arrangements.forEach { row -> PreviewCourseRow(row) }
-                    TextButton(onClick = onReadAgain, modifier = Modifier.testTag("preview_read_again")) {
+                    if (onReadAgain != null) TextButton(onClick = onReadAgain,
+                        modifier = Modifier.testTag("preview_read_again")) {
                         Text("返回重新读取")
                     }
-                }
-            }
-        }
-    }
 }
 
 @Composable

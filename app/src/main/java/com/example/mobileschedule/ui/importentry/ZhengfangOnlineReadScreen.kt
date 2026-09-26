@@ -66,13 +66,16 @@ private sealed interface OnlineReadState {
 fun ZhengfangOnlineReadRoute(
     targetSemesterId: Long,
     onExit: () -> Unit,
+    onOpenSchedule: () -> Unit,
     viewModel: OnlineImportPreviewViewModel = hiltViewModel(),
 ) {
     val previewState by viewModel.state.collectAsStateWithLifecycle()
     ZhengfangOnlineReadScreen(targetSemesterId, onExit,
         previewState = previewState,
         onPreparePreview = viewModel::show,
-        onInvalidatePreview = viewModel::invalidate)
+        onInvalidatePreview = viewModel::invalidate,
+        onConfirmPreview = viewModel::confirm,
+        onOpenSchedule = onOpenSchedule)
 }
 
 /** The user enters credentials only in the school WebView. No JavaScript bridge or database write exists here. */
@@ -86,6 +89,8 @@ fun ZhengfangOnlineReadScreen(
     previewState: OnlineImportPreviewState,
     onPreparePreview: (ParsedZhengfangSchedule) -> Unit,
     onInvalidatePreview: () -> Unit,
+    onConfirmPreview: () -> Unit = {},
+    onOpenSchedule: () -> Unit = {},
 ) {
     val context = LocalContext.current
     var yearText by remember { mutableStateOf("") }
@@ -205,12 +210,15 @@ fun ZhengfangOnlineReadScreen(
         onExit()
     }
     fun closePreview() {
+        if (previewState is OnlineImportPreviewState.Saving) return
         onInvalidatePreview()
         showingPreview = false
         readState = OnlineReadState.Idle
     }
     BackHandler {
         when {
+            showingPreview && previewState is OnlineImportPreviewState.Saving -> Unit
+            showingPreview && previewState is OnlineImportPreviewState.Saved -> onOpenSchedule()
             showingPreview -> closePreview()
             reading -> cancelRead()
             webView.canGoBack() -> webView.goBack()
@@ -219,7 +227,8 @@ fun ZhengfangOnlineReadScreen(
     }
 
     if (showingPreview) {
-        OnlineImportPreviewScreen(previewState, onBack = ::closePreview, onReadAgain = ::closePreview)
+        OnlineImportPreviewScreen(previewState, onBack = ::closePreview, onReadAgain = ::closePreview,
+            onConfirm = onConfirmPreview, onOpenSchedule = onOpenSchedule)
         return
     }
 

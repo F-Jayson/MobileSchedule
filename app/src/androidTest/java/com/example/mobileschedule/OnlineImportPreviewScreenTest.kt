@@ -2,9 +2,12 @@ package com.example.mobileschedule
 
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.ui.test.assertIsNotEnabled
+import androidx.compose.ui.test.assertIsEnabled
 import androidx.compose.ui.test.assertTextContains
+import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithTag
+import androidx.compose.ui.test.onNodeWithText
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.example.mobileschedule.data.importer.ZhengfangOnlineRead
 import com.example.mobileschedule.data.importer.ParsedZhengfangSchedule
@@ -18,6 +21,7 @@ import java.time.LocalDate
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
+import org.junit.Assert.assertEquals
 
 @RunWith(AndroidJUnit4::class)
 class OnlineImportPreviewScreenTest {
@@ -28,7 +32,12 @@ class OnlineImportPreviewScreenTest {
         CompletenessStatus.UNKNOWN) : OnlineImportPreviewState.Ready {
         val source = ZhengfangOnlineRead.parse(raw, 7, ZhengfangOnlineRead.selectTerm("2026", 1)!!)
         val parsed = ParsedZhengfangSchedule(source.request.copy(completeness =
-            source.request.completeness.copy(status = completeness)), source.parsedRowCount, source.diagnostics)
+            source.request.completeness.copy(status = completeness,
+                pageIndicesRead = if (completeness == CompletenessStatus.VERIFIED_FULL) listOf(0) else emptyList(),
+                expectedPageCount = if (completeness == CompletenessStatus.VERIFIED_FULL) 1 else null,
+                reportedSourceTotalCount = if (completeness == CompletenessStatus.VERIFIED_FULL)
+                    source.request.sourceObservedCount else null,
+                basis = "synthetic complete-page fixture")), source.parsedRowCount, source.diagnostics)
         val common = ImportValidator.buildPreview("local-preview", parsed.request, config, null, oldCount)
         return OnlineImportPreviewState.Ready(parsed.toPreviewSummary(common))
     }
@@ -69,5 +78,22 @@ class OnlineImportPreviewScreenTest {
 
         compose.onNodeWithTag("preview_block_reason").assertTextContains("部分", substring = true)
         compose.onNodeWithTag("preview_confirm").assertIsNotEnabled()
+    }
+
+    @Test fun verifiedPreviewRequiresDialogBeforeCommitAndCancelDoesNotSave() {
+        val state = preview("""{"xsxx":{"XNM":"2026","XQM":"3","XNMC":"2026-2027","XQMMC":"1"},"sjkList":[],"kbList":[{"kcmc":"合成课程","jc":"1-2节","xqj":"1","zcd":"1周","xnm":"2026","xqm":"3"}]}""",
+            4, CompletenessStatus.VERIFIED_FULL)
+        var confirms = 0
+        compose.setContent { MaterialTheme { OnlineImportPreviewScreen(state, {}, {}, onConfirm = { confirms++ }) } }
+        compose.onNodeWithTag("preview_confirm").assertIsEnabled().performClick()
+        compose.onNodeWithText("学校：福建师范大学", substring = true).assertExists()
+        compose.onNodeWithText("将替换此学校、此来源学期已有的 4 条课程安排",
+            substring = true).assertExists()
+        compose.runOnIdle { assertEquals(0, confirms) }
+        compose.onNodeWithTag("preview_dialog_cancel").performClick()
+        compose.runOnIdle { assertEquals(0, confirms) }
+        compose.onNodeWithTag("preview_confirm").performClick()
+        compose.onNodeWithTag("preview_dialog_confirm").performClick()
+        compose.runOnIdle { assertEquals(1, confirms) }
     }
 }

@@ -7,6 +7,8 @@ import com.example.mobileschedule.data.importer.ZhengfangImportPreviewSummary
 import com.example.mobileschedule.data.importer.toPreviewSummary
 import com.example.mobileschedule.data.model.DataErrorCode
 import com.example.mobileschedule.data.model.ImportPreview
+import com.example.mobileschedule.data.model.ImportConfirmation
+import com.example.mobileschedule.data.model.ImportReceipt
 import com.example.mobileschedule.data.model.ImportRequest
 import com.example.mobileschedule.data.model.RepoResult
 import com.example.mobileschedule.data.repository.ScheduleRepository
@@ -23,6 +25,11 @@ sealed interface OnlineImportPreviewState {
     data object Loading : OnlineImportPreviewState
     data class Ready(val summary: ZhengfangImportPreviewSummary) : OnlineImportPreviewState
     data class Error(val message: String) : OnlineImportPreviewState
+    data class Saving(val summary: ZhengfangImportPreviewSummary) : OnlineImportPreviewState
+    data class Saved(val summary: ZhengfangImportPreviewSummary, val receipt: ImportReceipt,
+        val activationError: String? = null) : OnlineImportPreviewState
+    data class SaveFailed(val summary: ZhengfangImportPreviewSummary, val message: String,
+        val retryable: Boolean) : OnlineImportPreviewState
 }
 
 /** One live preview at a time. Late results are discarded and cannot replace a newer selection. */
@@ -30,6 +37,10 @@ internal class OnlineImportPreviewSession(
     private val scope: CoroutineScope,
     private val prepare: suspend (ImportRequest) -> RepoResult<ImportPreview>,
     private val discard: suspend (String) -> RepoResult<Unit>,
+    private val commit: suspend (String, ImportConfirmation) -> RepoResult<ImportReceipt> = { _, _ ->
+        error("Import commit was not supplied")
+    },
+    private val activate: suspend (Long) -> RepoResult<Unit> = { error("Semester activation was not supplied") },
 ) {
     private val mutableState = MutableStateFlow<OnlineImportPreviewState>(OnlineImportPreviewState.Idle)
     val state: StateFlow<OnlineImportPreviewState> = mutableState
@@ -37,6 +48,7 @@ internal class OnlineImportPreviewSession(
     private var previewId: String? = null
 
     fun show(parsed: ParsedZhengfangSchedule) {
+        if (mutableState.value is OnlineImportPreviewState.Saving) return
         invalidate()
         val requestedGeneration = generation
         mutableState.value = OnlineImportPreviewState.Loading
@@ -74,6 +86,7 @@ internal class OnlineImportPreviewSession(
     }
 
     fun invalidate() {
+        if (mutableState.value is OnlineImportPreviewState.Saving) return
         generation++
         val oldId = previewId
         previewId = null
@@ -88,16 +101,73 @@ internal class OnlineImportPreviewSession(
             }
         }
     }
+
+    /** Only an explicit UI confirmation enters this path; the repository rechecks every precondition. */
+    fun confirm() {
+        val current = mutableState.value
+        val summary = when (current) {
+            is OnlineImportPreviewState.Ready -> current.summary
+            is OnlineImportPreviewState.SaveFailed -> if (current.retryable) current.summary else return
+            else -> return
+        }
+        if (!summary.canCommit || summary.completeness.status !=
+            com.example.mobileschedule.data.model.CompletenessStatus.VERIFIED_FULL) return
+        val scopeToReplace = summary.replacementScope ?: return
+        val oldCount = summary.replaceCount ?: return
+        if (summary.previewId != previewId) return
+        val confirmation = ImportConfirmation(summary.previewId, scopeToReplace, oldCount, summary.validCount)
+        mutableState.value = OnlineImportPreviewState.Saving(summary)
+        scope.launch {
+            try {
+                when (val result = commit(summary.previewId, confirmation)) {
+                    is RepoResult.Err -> mutableState.value = OnlineImportPreviewState.SaveFailed(
+                        summary, saveError(result.error.code),
+                        retryable = result.error.code == DataErrorCode.STORAGE_WRITE_FAILED)
+                    is RepoResult.Ok -> {
+                        previewId = null // A committed token must never be submitted again.
+                        val activationError = try {
+                            when (activate(result.value.semesterId)) {
+                                is RepoResult.Ok -> null
+                                is RepoResult.Err -> "课程已保存，但切换到目标学期失败。请在设置中选择该学期。"
+                            }
+                        } catch (cancel: CancellationException) {
+                            throw cancel
+                        } catch (_: Exception) {
+                            "课程已保存，但切换到目标学期失败。请在设置中选择该学期。"
+                        }
+                        mutableState.value = OnlineImportPreviewState.Saved(summary, result.value, activationError)
+                    }
+                }
+            } catch (cancel: CancellationException) {
+                throw cancel
+            } catch (_: Exception) {
+                mutableState.value = OnlineImportPreviewState.SaveFailed(summary,
+                    "保存状态未能确认，请重新读取并核对本地课表后重试。", retryable = false)
+            }
+        }
+    }
 }
 
 @HiltViewModel
 class OnlineImportPreviewViewModel @Inject constructor(repository: ScheduleRepository) : ViewModel() {
     private val session = OnlineImportPreviewSession(viewModelScope,
-        repository::prepareImport, repository::discardImport)
+        repository::prepareImport, repository::discardImport,
+        repository::commitImport, repository::setActiveSemester)
     val state: StateFlow<OnlineImportPreviewState> = session.state
 
     fun show(parsed: ParsedZhengfangSchedule) = session.show(parsed)
     fun invalidate() = session.invalidate()
+    fun confirm() = session.confirm()
+}
+
+private fun saveError(code: DataErrorCode): String = when (code) {
+    DataErrorCode.STORAGE_WRITE_FAILED -> "保存失败，事务已回滚，旧课表保持不变。请再次确认后重试。"
+    DataErrorCode.PREVIEW_STALE -> "预览已失效，旧课表保持不变。请重新读取。"
+    DataErrorCode.SCOPE_CONFLICT -> "来源学期绑定已变化，旧课表保持不变。请重新读取并核对目标学期。"
+    DataErrorCode.IMPORT_BLOCKED -> "导入校验未通过，旧课表保持不变。请重新读取。"
+    DataErrorCode.CONFIG_REQUIRED, DataErrorCode.CONFIG_INVALID, DataErrorCode.CONFIG_CONFLICT ->
+        "本地学期或节次配置已变化，旧课表保持不变。请检查设置后重新读取。"
+    else -> "保存失败（$code），旧课表保持不变。请重新读取。"
 }
 
 private fun previewError(code: DataErrorCode): String = when (code) {

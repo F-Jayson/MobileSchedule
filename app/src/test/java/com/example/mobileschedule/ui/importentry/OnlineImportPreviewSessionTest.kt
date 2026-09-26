@@ -7,6 +7,8 @@ import com.example.mobileschedule.data.model.DataError
 import com.example.mobileschedule.data.model.DataErrorCode
 import com.example.mobileschedule.data.model.ImportIssueCode
 import com.example.mobileschedule.data.model.ImportPreview
+import com.example.mobileschedule.data.model.ImportReceipt
+import com.example.mobileschedule.data.model.SourceScope
 import com.example.mobileschedule.data.model.RepoResult
 import com.example.mobileschedule.data.model.SemesterConfig
 import com.example.mobileschedule.data.rules.ImportValidator
@@ -32,6 +34,18 @@ class OnlineImportPreviewSessionTest {
 
     private fun preview(parsed: ParsedZhengfangSchedule, id: String, replaceCount: Int = 2): ImportPreview =
         ImportValidator.buildPreview(id, parsed.request, config, null, replaceCount)
+
+    private fun verifiedParsed(): ParsedZhengfangSchedule = parsed().let { source ->
+        source.copy(request = source.request.copy(completeness = source.request.completeness.copy(
+            status = CompletenessStatus.VERIFIED_FULL,
+            pageIndicesRead = listOf(0), expectedPageCount = 1,
+            reportedSourceTotalCount = source.request.sourceObservedCount,
+            basis = "synthetic complete-page fixture",
+        )))
+    }
+
+    private fun receipt(saved: Int = 1) = ImportReceipt("batch", SourceScope("fjnu",
+        "fjnu-zhengfang-web", "xnm=2026;xqm=3"), 7, 2, saved)
 
     @Test fun schoolResponseBecomesBlockedPreviewWithSourceRowsAndReplacementScope() = runTest {
         val source = parsed()
@@ -118,5 +132,148 @@ class OnlineImportPreviewSessionTest {
 
         val error = session.state.value as OnlineImportPreviewState.Error
         assertTrue(error.message.contains("本地"))
+    }
+
+    @Test fun unknownCompletenessCannotSubmitEvenIfConfirmationIsRequested() = runTest {
+        var commits = 0
+        val source = parsed()
+        val session = OnlineImportPreviewSession(this,
+            prepare = { RepoResult.Ok(preview(source, "blocked")) },
+            discard = { RepoResult.Ok(Unit) },
+            commit = { _, _ -> commits++; RepoResult.Ok(receipt()) },
+            activate = { RepoResult.Ok(Unit) })
+        session.show(source)
+        runCurrent()
+        session.confirm()
+        runCurrent()
+        assertEquals(0, commits)
+        assertTrue(session.state.value is OnlineImportPreviewState.Ready)
+    }
+
+    @Test fun oneConfirmedBatchSubmitsOnceAndShowsReceiptCounts() = runTest {
+        val source = verifiedParsed()
+        val gate = CompletableDeferred<RepoResult<ImportReceipt>>()
+        var commits = 0
+        var activated = 0
+        val session = OnlineImportPreviewSession(this,
+            prepare = { RepoResult.Ok(preview(source, "ready")) },
+            discard = { RepoResult.Ok(Unit) },
+            commit = { _, confirmation ->
+                commits++
+                assertEquals("ready", confirmation.previewId)
+                assertEquals(2, confirmation.replaceCount)
+                assertEquals(1, confirmation.validCount)
+                gate.await()
+            },
+            activate = { activated++; RepoResult.Ok(Unit) })
+        session.show(source)
+        runCurrent()
+        assertTrue((session.state.value as OnlineImportPreviewState.Ready).summary.canCommit)
+
+        session.confirm()
+        session.confirm()
+        assertTrue(session.state.value is OnlineImportPreviewState.Saving)
+        runCurrent()
+        assertEquals(1, commits)
+        gate.complete(RepoResult.Ok(receipt(saved = 3)))
+        runCurrent()
+
+        val saved = session.state.value as OnlineImportPreviewState.Saved
+        assertEquals(3, saved.receipt.savedCount)
+        assertEquals(2, saved.receipt.removedCount)
+        assertEquals(1, activated)
+        session.confirm()
+        runCurrent()
+        assertEquals(1, commits)
+    }
+
+    @Test fun canceledPreviewNeverSubmits() = runTest {
+        val source = verifiedParsed()
+        val discarded = mutableListOf<String>()
+        var commits = 0
+        val session = OnlineImportPreviewSession(this,
+            prepare = { RepoResult.Ok(preview(source, "cancel-me")) },
+            discard = { id -> discarded += id; RepoResult.Ok(Unit) },
+            commit = { _, _ -> commits++; RepoResult.Ok(receipt()) },
+            activate = { RepoResult.Ok(Unit) })
+        session.show(source)
+        runCurrent()
+        session.invalidate()
+        runCurrent()
+        session.confirm()
+        runCurrent()
+        assertEquals(listOf("cancel-me"), discarded)
+        assertEquals(0, commits)
+        assertEquals(OnlineImportPreviewState.Idle, session.state.value)
+    }
+
+    @Test fun failedWriteKeepsPreviewForExplicitRetryAndDoesNotClaimSuccess() = runTest {
+        val source = verifiedParsed()
+        var commits = 0
+        val session = OnlineImportPreviewSession(this,
+            prepare = { RepoResult.Ok(preview(source, "retry")) },
+            discard = { RepoResult.Ok(Unit) },
+            commit = { _, _ ->
+                commits++
+                if (commits == 1) RepoResult.Err(DataError(DataErrorCode.STORAGE_WRITE_FAILED))
+                else RepoResult.Ok(receipt())
+            },
+            activate = { RepoResult.Ok(Unit) })
+        session.show(source)
+        runCurrent()
+        session.confirm()
+        runCurrent()
+        val failed = session.state.value as OnlineImportPreviewState.SaveFailed
+        assertTrue(failed.retryable)
+        assertTrue(failed.message.contains("旧课表"))
+        assertEquals(1, commits)
+        session.confirm()
+        runCurrent()
+        assertEquals(2, commits)
+        assertTrue(session.state.value is OnlineImportPreviewState.Saved)
+    }
+
+    @Test fun stalePreviewRequiresNewReadAndNeverRetriesSameToken() = runTest {
+        val source = verifiedParsed()
+        var commits = 0
+        val session = OnlineImportPreviewSession(this,
+            prepare = { RepoResult.Ok(preview(source, "stale")) },
+            discard = { RepoResult.Ok(Unit) },
+            commit = { _, _ -> commits++; RepoResult.Err(DataError(DataErrorCode.PREVIEW_STALE)) },
+            activate = { RepoResult.Ok(Unit) })
+        session.show(source)
+        runCurrent()
+        session.confirm()
+        runCurrent()
+        assertFalse((session.state.value as OnlineImportPreviewState.SaveFailed).retryable)
+        session.confirm()
+        runCurrent()
+        assertEquals(1, commits)
+    }
+
+    @Test fun savingCannotBeCanceledOrReplacedAndActivationFailureDoesNotHideSavedReceipt() = runTest {
+        val source = verifiedParsed()
+        val gate = CompletableDeferred<RepoResult<ImportReceipt>>()
+        var prepares = 0
+        var discards = 0
+        val session = OnlineImportPreviewSession(this,
+            prepare = { prepares++; RepoResult.Ok(preview(source, "in-flight")) },
+            discard = { discards++; RepoResult.Ok(Unit) },
+            commit = { _, _ -> gate.await() },
+            activate = { RepoResult.Err(DataError(DataErrorCode.STORAGE_WRITE_FAILED)) })
+        session.show(source)
+        runCurrent()
+        session.confirm()
+        runCurrent()
+        session.invalidate()
+        session.show(source)
+        assertTrue(session.state.value is OnlineImportPreviewState.Saving)
+        assertEquals(1, prepares)
+        assertEquals(0, discards)
+        gate.complete(RepoResult.Ok(receipt()))
+        runCurrent()
+        val saved = session.state.value as OnlineImportPreviewState.Saved
+        assertEquals(1, saved.receipt.savedCount)
+        assertTrue(saved.activationError!!.contains("已保存"))
     }
 }

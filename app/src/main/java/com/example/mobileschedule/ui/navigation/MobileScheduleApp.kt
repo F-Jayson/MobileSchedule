@@ -81,7 +81,13 @@ fun MobileScheduleApp() {
             composable("import/login/{semesterId}") { loginEntry ->
                 val semesterId = loginEntry.arguments?.getString("semesterId")?.toLongOrNull()
                 if (semesterId != null) {
-                    ZhengfangOnlineReadRoute(semesterId, onExit = { navController.popBackStack() })
+                    ZhengfangOnlineReadRoute(semesterId, onExit = { navController.popBackStack() },
+                        onOpenSchedule = {
+                            navController.navigate(Destination.SCHEDULE.route) {
+                                popUpTo(navController.graph.findStartDestination().id) { inclusive = false }
+                                launchSingleTop = true
+                            }
+                        })
                 }
             }
             composable("config/new") {
