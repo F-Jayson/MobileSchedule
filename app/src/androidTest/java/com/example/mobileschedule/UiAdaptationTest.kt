@@ -1,8 +1,5 @@
 package com.example.mobileschedule
 
-import android.content.ContentValues
-import android.graphics.Bitmap
-import android.provider.MediaStore
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
@@ -127,16 +124,8 @@ class UiAdaptationTest {
 
     private fun saveScreenshot(name: String, frameOnly: Boolean = false) {
         val instrumentation = InstrumentationRegistry.getInstrumentation()
-        val resolver = instrumentation.targetContext.contentResolver
-        val uri = resolver.insert(MediaStore.Images.Media.EXTERNAL_CONTENT_URI, ContentValues().apply {
-            put(MediaStore.Images.Media.DISPLAY_NAME, name)
-            put(MediaStore.Images.Media.MIME_TYPE, "image/png")
-            put(MediaStore.Images.Media.RELATIVE_PATH, "Pictures/MobileScheduleTest")
-        }) ?: error("Cannot create screenshot")
-        resolver.openOutputStream(uri)?.use { output ->
-            (if (frameOnly) compose.onNodeWithTag("adaptation_frame").captureToImage().asAndroidBitmap()
-                else instrumentation.uiAutomation.takeScreenshot() ?: error("Cannot capture screen"))
-                .compress(Bitmap.CompressFormat.PNG, 100, output)
-        } ?: error("Cannot write screenshot")
+        saveSyntheticScreenshot(name,
+            if (frameOnly) compose.onNodeWithTag("adaptation_frame").captureToImage().asAndroidBitmap()
+            else instrumentation.uiAutomation.takeScreenshot() ?: error("Cannot capture screen"))
     }
 }

@@ -1,9 +1,6 @@
 package com.example.mobileschedule
 
 import android.content.Context
-import android.content.ContentValues
-import android.graphics.Bitmap
-import android.provider.MediaStore
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -56,15 +53,7 @@ class ScheduleDisplaySettingsTest {
         compose.onNodeWithTag("display_teacher_switch").performClick()
         compose.onNodeWithTag("display_location_switch").assertIsOff()
         compose.onNodeWithTag("display_teacher_switch").assertIsOff()
-        val context = InstrumentationRegistry.getInstrumentation().targetContext
-        val uri = context.contentResolver.insert(MediaStore.Images.Media.EXTERNAL_CONTENT_URI, ContentValues().apply {
-            put(MediaStore.Images.Media.DISPLAY_NAME, "schedule-display-settings.png")
-            put(MediaStore.Images.Media.MIME_TYPE, "image/png")
-            put(MediaStore.Images.Media.RELATIVE_PATH, "Pictures/MobileScheduleTest")
-        }) ?: error("Cannot create settings evidence")
-        context.contentResolver.openOutputStream(uri)?.use { output ->
-            compose.onNodeWithTag("display_settings_page").captureToImage().asAndroidBitmap()
-                .compress(Bitmap.CompressFormat.PNG, 100, output)
-        } ?: error("Cannot write settings evidence")
+        saveSyntheticScreenshot("schedule-display-settings.png",
+            compose.onNodeWithTag("display_settings_page").captureToImage().asAndroidBitmap())
     }
 }

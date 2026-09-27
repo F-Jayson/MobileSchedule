@@ -1,8 +1,5 @@
 package com.example.mobileschedule
 
-import android.content.ContentValues
-import android.graphics.Bitmap
-import android.provider.MediaStore
 import android.view.View
 import android.widget.DatePicker
 import androidx.compose.foundation.layout.Box
@@ -18,6 +15,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsNotEnabled
+import androidx.compose.ui.test.assertIsOn
 import androidx.compose.ui.test.assertTextContains
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithTag
@@ -105,7 +103,9 @@ class SettingsConfigUiTest {
         compose.onNodeWithTag("config_name").performTextInput("测试学期")
         compose.onNodeWithTag("config_weeks").performTextInput("12")
         compose.onNodeWithTag("config_sections").performTextInput("2")
-        compose.onNodeWithTag("times_toggle").performClick()
+        compose.onNodeWithTag("config_sections").assertTextContains("2", substring = true)
+        compose.onNodeWithTag("times_toggle").performScrollTo().performClick()
+        compose.onNodeWithTag("times_toggle").assertIsOn()
         compose.onNodeWithTag("config_fields").performScrollToIndex(6)
         compose.onNodeWithTag("time_start_2").performClick()
         compose.onNodeWithTag("save_config").assertIsDisplayed()
@@ -181,16 +181,8 @@ class SettingsConfigUiTest {
 
     private fun saveScreenshot(name: String) {
         val instrumentation = InstrumentationRegistry.getInstrumentation()
-        val resolver = instrumentation.targetContext.contentResolver
-        val uri = resolver.insert(MediaStore.Images.Media.EXTERNAL_CONTENT_URI, ContentValues().apply {
-            put(MediaStore.Images.Media.DISPLAY_NAME, name)
-            put(MediaStore.Images.Media.MIME_TYPE, "image/png")
-            put(MediaStore.Images.Media.RELATIVE_PATH, "Pictures/MobileScheduleTest")
-        }) ?: error("Cannot create screenshot")
-        resolver.openOutputStream(uri)?.use { output ->
-            (instrumentation.uiAutomation.takeScreenshot() ?: error("Cannot capture screen"))
-                .compress(Bitmap.CompressFormat.PNG, 100, output)
-        } ?: error("Cannot write screenshot")
+        saveSyntheticScreenshot(name, instrumentation.uiAutomation.takeScreenshot()
+            ?: error("Cannot capture screen"))
     }
 
     @Composable

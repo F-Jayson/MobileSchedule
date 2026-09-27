@@ -1,8 +1,5 @@
 package com.example.mobileschedule
 
-import android.graphics.Bitmap
-import android.content.ContentValues
-import android.provider.MediaStore
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -71,16 +68,8 @@ class WeekGridLayoutTest {
             compose.onNodeWithTag("section_time_${index + 1}").assertTextContains(start, substring = true)
             compose.onNodeWithTag("section_time_${index + 1}").assertTextContains(end, substring = true)
         }
-        val context = InstrumentationRegistry.getInstrumentation().targetContext
-        val uri = context.contentResolver.insert(MediaStore.Images.Media.EXTERNAL_CONTENT_URI, ContentValues().apply {
-            put(MediaStore.Images.Media.DISPLAY_NAME, "week-grid-default-times.png")
-            put(MediaStore.Images.Media.MIME_TYPE, "image/png")
-            put(MediaStore.Images.Media.RELATIVE_PATH, "Pictures/MobileScheduleTest")
-        }) ?: error("Cannot create layout evidence")
-        context.contentResolver.openOutputStream(uri)?.use { output ->
-            compose.onNodeWithTag("week_grid").captureToImage().asAndroidBitmap()
-                .compress(Bitmap.CompressFormat.PNG, 100, output)
-        } ?: error("Cannot write layout evidence")
+        saveSyntheticScreenshot("week-grid-default-times.png",
+            compose.onNodeWithTag("week_grid").captureToImage().asAndroidBitmap())
     }
 
     @Test fun hidingOptionalCardFieldsKeepsCourseCardAccessible() {

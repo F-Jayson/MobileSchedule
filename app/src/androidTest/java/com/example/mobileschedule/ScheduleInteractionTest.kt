@@ -1,8 +1,5 @@
 package com.example.mobileschedule
 
-import android.content.ContentValues
-import android.graphics.Bitmap
-import android.provider.MediaStore
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
@@ -71,7 +68,8 @@ class ScheduleInteractionTest {
         compose.onNodeWithTag("week_title").assertTextContains("2", substring = true)
         val weekTitle = compose.onNodeWithTag("week_title").fetchSemanticsNode().boundsInRoot
         val firstDay = compose.onNodeWithTag("day_1").fetchSemanticsNode().boundsInRoot
-        assertTrue("week picker belongs in the grid's top-left header", kotlin.math.abs(weekTitle.top - firstDay.top) < 20f)
+        assertTrue("week picker belongs in the grid's top-left header: title=$weekTitle day=$firstDay",
+            kotlin.math.abs(weekTitle.top - firstDay.top) < 20f)
         compose.onNodeWithTag("previous_week").performClick()
         compose.onNodeWithTag("week_title").assertTextContains("1", substring = true)
         compose.onNodeWithTag("previous_week").assertIsNotEnabled()
@@ -206,15 +204,7 @@ class ScheduleInteractionTest {
     )
 
     private fun saveScreenshot(name: String) {
-        val context = InstrumentationRegistry.getInstrumentation().targetContext
-        val uri = context.contentResolver.insert(MediaStore.Images.Media.EXTERNAL_CONTENT_URI, ContentValues().apply {
-            put(MediaStore.Images.Media.DISPLAY_NAME, name)
-            put(MediaStore.Images.Media.MIME_TYPE, "image/png")
-            put(MediaStore.Images.Media.RELATIVE_PATH, "Pictures/MobileScheduleTest")
-        }) ?: error("Cannot create screenshot")
-        context.contentResolver.openOutputStream(uri)?.use { output ->
-            (InstrumentationRegistry.getInstrumentation().uiAutomation.takeScreenshot()
-                ?: error("Cannot capture screen")).compress(Bitmap.CompressFormat.PNG, 100, output)
-        } ?: error("Cannot write screenshot")
+        saveSyntheticScreenshot(name, InstrumentationRegistry.getInstrumentation().uiAutomation.takeScreenshot()
+            ?: error("Cannot capture screen"))
     }
 }

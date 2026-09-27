@@ -1,8 +1,5 @@
 package com.example.mobileschedule
 
-import android.content.ContentValues
-import android.graphics.Bitmap
-import android.provider.MediaStore
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsSelected
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
@@ -71,15 +68,7 @@ class NavigationSmokeTest {
 
     private fun saveScreenshot(name: String) {
         val instrumentation = InstrumentationRegistry.getInstrumentation()
-        val resolver = instrumentation.targetContext.contentResolver
-        val uri = resolver.insert(MediaStore.Images.Media.EXTERNAL_CONTENT_URI, ContentValues().apply {
-            put(MediaStore.Images.Media.DISPLAY_NAME, name)
-            put(MediaStore.Images.Media.MIME_TYPE, "image/png")
-            put(MediaStore.Images.Media.RELATIVE_PATH, "Pictures/MobileScheduleTest")
-        }) ?: error("Cannot create screenshot")
-        resolver.openOutputStream(uri)?.use { output ->
-            (instrumentation.uiAutomation.takeScreenshot() ?: error("Cannot capture screen"))
-                .compress(Bitmap.CompressFormat.PNG, 100, output)
-        } ?: error("Cannot write screenshot")
+        saveSyntheticScreenshot(name, instrumentation.uiAutomation.takeScreenshot()
+            ?: error("Cannot capture screen"))
     }
 }

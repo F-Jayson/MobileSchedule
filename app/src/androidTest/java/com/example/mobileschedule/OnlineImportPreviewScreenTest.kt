@@ -5,6 +5,7 @@ import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.assertIsEnabled
 import androidx.compose.ui.test.assertTextContains
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.test.performTextReplacement
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithTag
@@ -108,7 +109,7 @@ class OnlineImportPreviewScreenTest {
         compose.setContent { MaterialTheme { OnlineImportPreviewScreen(state, {}, {},
             onConfirm = { confirms++ }, onOpenSchedule = { leaves++ }) } }
 
-        compose.onNodeWithTag("preview_leave").performClick()
+        compose.onNodeWithTag("preview_leave").performScrollTo().performClick()
         compose.runOnIdle {
             assertEquals(1, leaves)
             assertEquals(0, confirms)
@@ -123,7 +124,7 @@ class OnlineImportPreviewScreenTest {
             onConfirmFullCoverage = { confirmedCount = it }) } }
 
         compose.onNodeWithTag("preview_confirm").assertIsNotEnabled()
-        compose.onNodeWithTag("preview_verify_full").performClick()
+        compose.onNodeWithTag("preview_verify_full").performScrollTo().performClick()
         compose.onNodeWithTag("preview_verified_count").performTextReplacement("2")
         compose.onNodeWithTag("preview_verify_confirm").assertIsNotEnabled()
         compose.onNodeWithTag("preview_verified_count").performTextReplacement("1")
