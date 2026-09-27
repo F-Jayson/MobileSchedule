@@ -28,11 +28,13 @@ fun SettingsRoute(
     onCreate: () -> Unit,
     onEdit: (Long) -> Unit,
     onImport: () -> Unit,
+    onDisplaySettings: () -> Unit,
     viewModel: SettingsHomeViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     val error by viewModel.actionError.collectAsStateWithLifecycle()
-    SettingsHomeScreen(state, onCreate, onEdit, viewModel::activate, error, onImport)
+    SettingsHomeScreen(state, onCreate, onEdit, viewModel::activate, error, onImport,
+        onDisplaySettings)
 }
 
 @Composable
@@ -43,6 +45,7 @@ fun SettingsHomeScreen(
     onActivate: (Long) -> Unit,
     actionError: String? = null,
     onImport: () -> Unit = {},
+    onDisplaySettings: () -> Unit = {},
 ) {
     LazyColumn(Modifier.fillMaxSize().testTag("settings_page"),
         contentPadding = androidx.compose.foundation.layout.PaddingValues(20.dp),
@@ -86,6 +89,10 @@ fun SettingsHomeScreen(
                         }
                         TextButton(onClick = onImport, modifier = Modifier.testTag("settings_import")) {
                             Text("导入课程表")
+                        }
+                        TextButton(onClick = onDisplaySettings,
+                            modifier = Modifier.testTag("settings_display_settings")) {
+                            Text("课表设置")
                         }
                     }
                 }

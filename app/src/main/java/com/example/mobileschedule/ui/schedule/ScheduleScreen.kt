@@ -67,7 +67,6 @@ fun ScheduleRoute(
     onConfigure: () -> Unit,
     onSettings: () -> Unit,
     onImport: () -> Unit,
-    onDisplaySettings: () -> Unit,
     viewModel: ScheduleViewModel = hiltViewModel(),
 ) {
     val context = LocalContext.current
@@ -92,7 +91,6 @@ fun ScheduleRoute(
         onConfigure = onConfigure,
         onSettings = onSettings,
         onImport = onImport,
-        onDisplaySettings = onDisplaySettings,
         onRetry = viewModel::retry,
     )
 }
@@ -111,7 +109,6 @@ fun ScheduleScreen(
     onConfigure: () -> Unit = {},
     onSettings: () -> Unit = {},
     onImport: () -> Unit = {},
-    onDisplaySettings: () -> Unit = {},
     onRetry: () -> Unit = {},
 ) {
     when (state) {
@@ -145,7 +142,7 @@ fun ScheduleScreen(
         is ScheduleUiState.Ready -> {
             var showWeekPicker by remember { mutableStateOf(false) }
             Column(Modifier.fillMaxSize()) {
-                ScheduleWeekControls(state, onPreviousWeek, onNextWeek, onReturnToCurrentWeek, onImport)
+                ScheduleSemesterHeader(state, onImport)
                 if (state.week.schedule.arrangements.isEmpty()) {
                     Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp),
                         verticalAlignment = Alignment.CenterVertically) {
@@ -162,10 +159,7 @@ fun ScheduleScreen(
                         onWeekTitleClick = { showWeekPicker = true },
                         onPreviousWeek = onPreviousWeek, onNextWeek = onNextWeek)
                 }
-                TextButton(onClick = onDisplaySettings,
-                    modifier = Modifier.fillMaxWidth().testTag("schedule_display_settings")) {
-                    Text("课表设置", style = MaterialTheme.typography.labelMedium)
-                }
+                ScheduleWeekControls(state, onPreviousWeek, onNextWeek, onReturnToCurrentWeek)
             }
             if (showWeekPicker) WeekPickerDialog(state, onSelectWeek) { showWeekPicker = false }
         }

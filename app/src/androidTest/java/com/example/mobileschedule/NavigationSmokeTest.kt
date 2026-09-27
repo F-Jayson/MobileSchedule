@@ -2,10 +2,12 @@ package com.example.mobileschedule
 
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsSelected
+import androidx.compose.ui.test.hasTestTag
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onAllNodesWithTag
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performScrollToNode
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import org.junit.Rule
@@ -49,6 +51,14 @@ class NavigationSmokeTest {
         compose.onNodeWithTag("settings_page").assertIsDisplayed()
         compose.onNodeWithTag("tab_settings").assertIsSelected()
         compose.waitUntil(timeoutMillis = 30_000) { hasTag("settings_import") }
+        compose.onNodeWithTag("settings_page").performScrollToNode(hasTestTag("settings_display_settings"))
+        compose.onNodeWithTag("settings_display_settings").assertIsDisplayed().performClick()
+        compose.onNodeWithTag("display_settings_page").assertIsDisplayed()
+        compose.onNodeWithTag("tab_settings").assertDoesNotExist()
+        compose.onNodeWithTag("display_settings_back").performClick()
+        compose.onNodeWithTag("settings_page").assertIsDisplayed()
+        compose.onNodeWithTag("tab_settings").assertIsSelected()
+        compose.onNodeWithTag("settings_page").performScrollToNode(hasTestTag("settings_import"))
         compose.onNodeWithTag("settings_import").performClick()
         compose.onNodeWithTag("import_intro").assertIsDisplayed()
         compose.onNodeWithTag("import_back").performClick()

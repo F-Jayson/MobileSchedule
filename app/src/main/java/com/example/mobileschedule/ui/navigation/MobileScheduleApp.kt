@@ -2,9 +2,16 @@ package com.example.mobileschedule.ui.navigation
 
 import androidx.annotation.DrawableRes
 import androidx.annotation.StringRes
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Icon
 import androidx.compose.material3.NavigationBar
+import androidx.compose.material3.NavigationBarDefaults
 import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
@@ -14,6 +21,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.unit.dp
 import androidx.navigation.NavGraph.Companion.findStartDestination
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
@@ -43,21 +51,26 @@ fun MobileScheduleApp() {
     Scaffold(
         bottomBar = {
             if (Destination.entries.any { it.route == entry?.destination?.route }) {
-                NavigationBar {
-                    Destination.entries.forEach { destination ->
-                        NavigationBarItem(
-                            selected = entry?.destination?.route == destination.route,
-                            onClick = {
-                                navController.navigate(destination.route) {
-                                    popUpTo(navController.graph.findStartDestination().id) { saveState = true }
-                                    launchSingleTop = true
-                                    restoreState = true
-                                }
-                            },
-                            icon = { Icon(painterResource(destination.icon), contentDescription = null) },
-                            label = { Text(stringResource(destination.label)) },
-                            modifier = Modifier.testTag("tab_${destination.route}"),
-                        )
+                Column(Modifier.fillMaxWidth()
+                    .background(NavigationBarDefaults.containerColor)
+                    .navigationBarsPadding()) {
+                    NavigationBar(modifier = Modifier.height(64.dp).testTag("main_bottom_navigation"),
+                        windowInsets = WindowInsets(0)) {
+                        Destination.entries.forEach { destination ->
+                            NavigationBarItem(
+                                selected = entry?.destination?.route == destination.route,
+                                onClick = {
+                                    navController.navigate(destination.route) {
+                                        popUpTo(navController.graph.findStartDestination().id) { saveState = true }
+                                        launchSingleTop = true
+                                        restoreState = true
+                                    }
+                                },
+                                icon = { Icon(painterResource(destination.icon), contentDescription = null) },
+                                label = { Text(stringResource(destination.label)) },
+                                modifier = Modifier.testTag("tab_${destination.route}"),
+                            )
+                        }
                     }
                 }
             }
@@ -67,7 +80,6 @@ fun MobileScheduleApp() {
             composable(Destination.SCHEDULE.route) {
                 ScheduleRoute(onConfigure = { navController.navigate("config/new") },
                     onSettings = { navController.navigate(Destination.SETTINGS.route) },
-                    onDisplaySettings = { navController.navigate("schedule/display-settings") },
                     onImport = { navController.navigate("import") })
             }
             composable("schedule/display-settings") {
@@ -76,7 +88,8 @@ fun MobileScheduleApp() {
             composable(Destination.SETTINGS.route) {
                 SettingsRoute(onCreate = { navController.navigate("config/new") },
                     onEdit = { id -> navController.navigate("config/$id") },
-                    onImport = { navController.navigate("import") })
+                    onImport = { navController.navigate("import") },
+                    onDisplaySettings = { navController.navigate("schedule/display-settings") })
             }
             composable("import") {
                 ImportIntroRoute(onBack = { navController.popBackStack() },

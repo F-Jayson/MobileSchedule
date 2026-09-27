@@ -20,10 +20,11 @@ import androidx.compose.ui.test.assertContentDescriptionContains
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertTextContains
 import androidx.compose.ui.test.captureToImage
+import androidx.compose.ui.test.hasTestTag
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.performClick
-import androidx.compose.ui.test.performScrollToIndex
+import androidx.compose.ui.test.performScrollToNode
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.dp
 import androidx.test.ext.junit.runners.AndroidJUnit4
@@ -79,6 +80,7 @@ class UiAdaptationTest {
         }
         compose.onNodeWithTag("schedule_import_top").assertIsDisplayed()
         compose.onNodeWithTag("week_title").assertIsDisplayed()
+        compose.onNodeWithTag("week_switch_bar").assertIsDisplayed()
         compose.onNodeWithTag("overlap_1_1").assertIsDisplayed()
             .assertContentDescriptionContains("同一时段2门课程", substring = true)
         saveScreenshot("ui-narrow-dark-font-fixture.png", frameOnly = true)
@@ -110,9 +112,9 @@ class UiAdaptationTest {
                 }
             }
         }
-        compose.onNodeWithTag("settings_page").performScrollToIndex(2)
+        compose.onNodeWithTag("settings_page").performScrollToNode(hasTestTag("settings_edit_1"))
         compose.onNodeWithTag("settings_edit_1").assertIsDisplayed().performClick()
-        compose.onNodeWithTag("settings_page").performScrollToIndex(3)
+        compose.onNodeWithTag("settings_page").performScrollToNode(hasTestTag("settings_import"))
         compose.onNodeWithTag("settings_import").assertIsDisplayed().performClick()
         assertEquals(1, edits)
         assertEquals(1, imports)

@@ -42,17 +42,7 @@ class ScheduleInteractionTest {
     @get:Rule val compose = createComposeRule()
     private val monday = LocalDate.of(2026, 9, 21)
 
-    @Test fun scheduleOffersBottomEntryToDisplaySettings() {
-        var openings = 0
-        compose.setContent { TestScreenHost {
-            ScheduleScreen(state(1, WeekPosition.InSemester(1)),
-                onDisplaySettings = { openings++ })
-        } }
-        compose.onNodeWithTag("schedule_display_settings").performClick()
-        assertEquals(1, openings)
-    }
-
-    @Test fun buttonsAndWeekPickerRespectBoundsAndReturnToRealWeek() {
+    @Test fun buttonsBelowGridAndWeekPickerRespectBoundsAndReturnToRealWeek() {
         compose.setContent {
             var browsing by remember { mutableIntStateOf(2) }
             TestScreenHost {
@@ -70,6 +60,11 @@ class ScheduleInteractionTest {
         val firstDay = compose.onNodeWithTag("day_1").fetchSemanticsNode().boundsInRoot
         assertTrue("week picker belongs in the grid's top-left header: title=$weekTitle day=$firstDay",
             kotlin.math.abs(weekTitle.top - firstDay.top) < 20f)
+        val grid = compose.onNodeWithTag("week_grid").fetchSemanticsNode().boundsInRoot
+        val switchBar = compose.onNodeWithTag("week_switch_bar").fetchSemanticsNode().boundsInRoot
+        assertTrue("week switch bar belongs below grid: grid=$grid bar=$switchBar",
+            switchBar.top >= grid.bottom - 1f)
+        compose.onNodeWithTag("schedule_display_settings").assertDoesNotExist()
         compose.onNodeWithTag("previous_week").performClick()
         compose.onNodeWithTag("week_title").assertTextContains("1", substring = true)
         compose.onNodeWithTag("previous_week").assertIsNotEnabled()

@@ -2,6 +2,7 @@ package com.example.mobileschedule.ui.schedule
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
@@ -20,17 +21,11 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.example.mobileschedule.data.model.WeekPosition
 
-/** Week controls stay above the grid; the picker lives in the grid's top-left corner. */
 @Composable
-internal fun ScheduleWeekControls(
+internal fun ScheduleSemesterHeader(
     state: ScheduleUiState.Ready,
-    onPreviousWeek: () -> Unit,
-    onNextWeek: () -> Unit,
-    onReturnToCurrentWeek: () -> Unit,
     onImport: () -> Unit = {},
 ) {
-    val schedule = state.week.schedule
-    val totalWeeks = requireNotNull(state.week.semester.config).totalWeeks
     Column(Modifier.fillMaxWidth()) {
         Row(Modifier.fillMaxWidth().padding(start = 16.dp, top = 8.dp, end = 8.dp),
             verticalAlignment = Alignment.CenterVertically) {
@@ -41,35 +36,6 @@ internal fun ScheduleWeekControls(
                 Text("导入", style = MaterialTheme.typography.labelMedium)
             }
         }
-        Row(Modifier.fillMaxWidth().testTag("week_switch_bar"),
-            horizontalArrangement = Arrangement.SpaceEvenly,
-            verticalAlignment = Alignment.CenterVertically) {
-            TextButton(onClick = onPreviousWeek, enabled = schedule.week > 1,
-                modifier = Modifier.weight(1f).testTag("previous_week")) {
-                Text("‹ 上周", style = MaterialTheme.typography.labelMedium)
-            }
-            when (val position = state.currentPosition) {
-                is WeekPosition.InSemester -> TextButton(onClick = onReturnToCurrentWeek,
-                    enabled = schedule.week != position.week,
-                    modifier = Modifier.weight(1f).testTag("return_to_current")) {
-                    Text("回到本周", style = MaterialTheme.typography.labelMedium)
-                }
-                WeekPosition.BeforeSemester -> TextButton(onClick = onReturnToCurrentWeek,
-                    enabled = schedule.week != 1,
-                    modifier = Modifier.weight(1f).testTag("return_to_boundary")) {
-                    Text("到第1周", style = MaterialTheme.typography.labelMedium)
-                }
-                WeekPosition.AfterSemester -> TextButton(onClick = onReturnToCurrentWeek,
-                    enabled = schedule.week != totalWeeks,
-                    modifier = Modifier.weight(1f).testTag("return_to_boundary")) {
-                    Text("到末周", style = MaterialTheme.typography.labelMedium)
-                }
-            }
-            TextButton(onClick = onNextWeek, enabled = schedule.week < totalWeeks,
-                modifier = Modifier.weight(1f).testTag("next_week")) {
-                Text("下周 ›", style = MaterialTheme.typography.labelMedium)
-            }
-        }
         when (state.currentPosition) {
             WeekPosition.BeforeSemester -> Text("学期尚未开始",
                 Modifier.padding(start = 16.dp).testTag("semester_boundary"),
@@ -78,6 +44,51 @@ internal fun ScheduleWeekControls(
                 Modifier.padding(start = 16.dp).testTag("semester_boundary"),
                 style = MaterialTheme.typography.bodySmall)
             is WeekPosition.InSemester -> Unit
+        }
+    }
+}
+
+@Composable
+internal fun ScheduleWeekControls(
+    state: ScheduleUiState.Ready,
+    onPreviousWeek: () -> Unit,
+    onNextWeek: () -> Unit,
+    onReturnToCurrentWeek: () -> Unit,
+) {
+    val schedule = state.week.schedule
+    val totalWeeks = requireNotNull(state.week.semester.config).totalWeeks
+    Row(Modifier.fillMaxWidth().testTag("week_switch_bar"),
+        horizontalArrangement = Arrangement.SpaceEvenly,
+        verticalAlignment = Alignment.CenterVertically) {
+        TextButton(onClick = onPreviousWeek, enabled = schedule.week > 1,
+            modifier = Modifier.weight(1f).testTag("previous_week"),
+            contentPadding = PaddingValues(horizontal = 4.dp)) {
+            Text("‹ 上周", maxLines = 1, style = MaterialTheme.typography.labelSmall)
+        }
+        when (val position = state.currentPosition) {
+            is WeekPosition.InSemester -> TextButton(onClick = onReturnToCurrentWeek,
+                enabled = schedule.week != position.week,
+                modifier = Modifier.weight(1f).testTag("return_to_current"),
+                contentPadding = PaddingValues(horizontal = 4.dp)) {
+                Text("回到本周", maxLines = 1, style = MaterialTheme.typography.labelSmall)
+            }
+            WeekPosition.BeforeSemester -> TextButton(onClick = onReturnToCurrentWeek,
+                enabled = schedule.week != 1,
+                modifier = Modifier.weight(1f).testTag("return_to_boundary"),
+                contentPadding = PaddingValues(horizontal = 4.dp)) {
+                Text("到第1周", maxLines = 1, style = MaterialTheme.typography.labelSmall)
+            }
+            WeekPosition.AfterSemester -> TextButton(onClick = onReturnToCurrentWeek,
+                enabled = schedule.week != totalWeeks,
+                modifier = Modifier.weight(1f).testTag("return_to_boundary"),
+                contentPadding = PaddingValues(horizontal = 4.dp)) {
+                Text("到末周", maxLines = 1, style = MaterialTheme.typography.labelSmall)
+            }
+        }
+        TextButton(onClick = onNextWeek, enabled = schedule.week < totalWeeks,
+            modifier = Modifier.weight(1f).testTag("next_week"),
+            contentPadding = PaddingValues(horizontal = 4.dp)) {
+            Text("下周 ›", maxLines = 1, style = MaterialTheme.typography.labelSmall)
         }
     }
 }
