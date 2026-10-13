@@ -1,5 +1,17 @@
 package com.example.mobileschedule.ui.schedule
 
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.core.FastOutLinearInEasing
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.LinearOutSlowInEasing
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.scaleOut
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideOutHorizontally
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
@@ -316,37 +328,67 @@ fun WeekScheduleGrid(
                         modifier = Modifier.width(rulerWidth).testTag("week_title"),
                         contentPadding = androidx.compose.foundation.layout.PaddingValues(0.dp),
                     ) {
-                        Text(
-                            "${schedule.week}\n周",
-                            textAlign = TextAlign.Center,
-                            fontWeight = FontWeight.Bold,
-                            color = MaterialTheme.colorScheme.primary,
-                            style = MaterialTheme.typography.labelSmall.copy(fontSize = 11.sp, lineHeight = 13.sp),
-                        )
+                        AnimatedContent(
+                            targetState = schedule.week,
+                            transitionSpec = {
+                                (fadeIn(animationSpec = tween(220)) + scaleIn(initialScale = 0.85f, animationSpec = tween(220)))
+                                    .togetherWith(fadeOut(animationSpec = tween(180)) + scaleOut(targetScale = 1.15f, animationSpec = tween(180)))
+                            },
+                            label = "week_title_transition",
+                        ) { currentWeek ->
+                            Text(
+                                "${currentWeek}\n周",
+                                textAlign = TextAlign.Center,
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.primary,
+                                style = MaterialTheme.typography.labelSmall.copy(fontSize = 11.sp, lineHeight = 13.sp),
+                            )
+                        }
                     }
                     Row(Modifier.weight(1f).testTag("week_header")) {
-                        weekdays.forEachIndexed { index, day ->
-                            val date = schedule.monday.plusDays(index.toLong())
-                            val label = if (compactHeader) day.removePrefix("周") else day
-                            val dateLabel = if (compactHeader) "${date.dayOfMonth}"
-                                else "%02d-%02d".format(date.monthValue, date.dayOfMonth)
-                            val isToday = todayIndex == index
-
-                            Text(
-                                "$label\n$dateLabel",
-                                Modifier.width(dayWidth)
-                                    .background(
-                                        if (isToday) MaterialTheme.colorScheme.primaryContainer else Color.Transparent,
-                                        shape = RoundedCornerShape(8.dp),
+                        AnimatedContent(
+                            targetState = schedule,
+                            transitionSpec = {
+                                val direction = if (targetState.week >= initialState.week) 1 else -1
+                                (slideInHorizontally(
+                                    animationSpec = tween(durationMillis = 280, easing = FastOutSlowInEasing),
+                                    initialOffsetX = { fullWidth -> fullWidth * direction / 4 },
+                                ) + fadeIn(animationSpec = tween(240)))
+                                    .togetherWith(
+                                        slideOutHorizontally(
+                                            animationSpec = tween(durationMillis = 240, easing = FastOutSlowInEasing),
+                                            targetOffsetX = { fullWidth -> -fullWidth * direction / 4 },
+                                        ) + fadeOut(animationSpec = tween(180))
                                     )
-                                    .padding(vertical = 5.dp)
-                                    .testTag("day_${index + 1}"),
-                                textAlign = TextAlign.Center,
-                                maxLines = 2,
-                                fontWeight = if (isToday) FontWeight.Bold else FontWeight.Medium,
-                                color = if (isToday) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurface,
-                                style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp, lineHeight = 12.sp),
-                            )
+                            },
+                            label = "week_header_transition",
+                            modifier = Modifier.fillMaxWidth(),
+                        ) { targetSchedule ->
+                            Row(Modifier.fillMaxWidth()) {
+                                weekdays.forEachIndexed { index, day ->
+                                    val date = targetSchedule.monday.plusDays(index.toLong())
+                                    val label = if (compactHeader) day.removePrefix("周") else day
+                                    val dateLabel = if (compactHeader) "${date.dayOfMonth}"
+                                        else "%02d-%02d".format(date.monthValue, date.dayOfMonth)
+                                    val isToday = todayIndex == index
+
+                                    Text(
+                                        "$label\n$dateLabel",
+                                        Modifier.width(dayWidth)
+                                            .background(
+                                                if (isToday) MaterialTheme.colorScheme.primaryContainer else Color.Transparent,
+                                                shape = RoundedCornerShape(8.dp),
+                                            )
+                                            .padding(vertical = 5.dp)
+                                            .testTag("day_${index + 1}"),
+                                        textAlign = TextAlign.Center,
+                                        maxLines = 2,
+                                        fontWeight = if (isToday) FontWeight.Bold else FontWeight.Medium,
+                                        color = if (isToday) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurface,
+                                        style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp, lineHeight = 12.sp),
+                                    )
+                                }
+                            }
                         }
                     }
                 }
@@ -382,31 +424,55 @@ fun WeekScheduleGrid(
                     Box(Modifier.weight(1f).testTag("week_body_scroll")) {
                         Box(Modifier.width(gridWidth).height(gridHeight)) {
                             WeekGridLines(gridWidth, gridHeight, dayWidth, rowHeight, config.totalSections, todayIndex)
-                            buildWeekGridSlots(schedule.arrangements).forEach { slot ->
-                                if (slot.arrangements.size == 2 && dayWidth >= 136.dp) {
-                                    slot.arrangements.forEachIndexed { lane, course ->
-                                        WeekGridCard(
-                                            slot = WeekGridSlot(slot.dayOfWeek, course.startSection, course.endSection, listOf(course)),
-                                            dayWidth = dayWidth,
-                                            rowHeight = rowHeight,
-                                            lane = lane,
-                                            laneCount = 2,
-                                            displayOptions = displayOptions,
-                                            onClick = { onCourseClick(course.id) },
+                            AnimatedContent(
+                                targetState = schedule,
+                                transitionSpec = {
+                                    val direction = if (targetState.week >= initialState.week) 1 else -1
+                                    (slideInHorizontally(
+                                        animationSpec = tween(durationMillis = 280, easing = FastOutSlowInEasing),
+                                        initialOffsetX = { fullWidth -> fullWidth * direction / 3 },
+                                    ) + fadeIn(
+                                        animationSpec = tween(durationMillis = 240, easing = LinearOutSlowInEasing),
+                                    )).togetherWith(
+                                        slideOutHorizontally(
+                                            animationSpec = tween(durationMillis = 240, easing = FastOutSlowInEasing),
+                                            targetOffsetX = { fullWidth -> -fullWidth * direction / 3 },
+                                        ) + fadeOut(
+                                            animationSpec = tween(durationMillis = 180, easing = FastOutLinearInEasing),
                                         )
-                                    }
-                                } else {
-                                    WeekGridCard(
-                                        slot = slot,
-                                        dayWidth = dayWidth,
-                                        rowHeight = rowHeight,
-                                        displayOptions = displayOptions,
-                                        onClick = {
-                                            val course = slot.arrangements.singleOrNull()
-                                            if (course != null) onCourseClick(course.id)
-                                            else overlappingCourses = slot.arrangements
-                                        },
                                     )
+                                },
+                                label = "week_cards_transition",
+                                modifier = Modifier.fillMaxSize(),
+                            ) { targetSchedule ->
+                                Box(Modifier.fillMaxSize()) {
+                                    buildWeekGridSlots(targetSchedule.arrangements).forEach { slot ->
+                                        if (slot.arrangements.size == 2 && dayWidth >= 136.dp) {
+                                            slot.arrangements.forEachIndexed { lane, course ->
+                                                WeekGridCard(
+                                                    slot = WeekGridSlot(slot.dayOfWeek, course.startSection, course.endSection, listOf(course)),
+                                                    dayWidth = dayWidth,
+                                                    rowHeight = rowHeight,
+                                                    lane = lane,
+                                                    laneCount = 2,
+                                                    displayOptions = displayOptions,
+                                                    onClick = { onCourseClick(course.id) },
+                                                )
+                                            }
+                                        } else {
+                                            WeekGridCard(
+                                                slot = slot,
+                                                dayWidth = dayWidth,
+                                                rowHeight = rowHeight,
+                                                displayOptions = displayOptions,
+                                                onClick = {
+                                                    val course = slot.arrangements.singleOrNull()
+                                                    if (course != null) onCourseClick(course.id)
+                                                    else overlappingCourses = slot.arrangements
+                                                },
+                                            )
+                                        }
+                                    }
                                 }
                             }
                         }
