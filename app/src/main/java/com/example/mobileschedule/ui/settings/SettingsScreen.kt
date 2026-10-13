@@ -28,8 +28,12 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
@@ -37,7 +41,10 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.example.mobileschedule.BuildConfig
 import com.example.mobileschedule.R
+import com.example.mobileschedule.data.model.DownloadMirror
+import com.example.mobileschedule.data.updater.AppUpdateInstaller
 
 @Composable
 fun SettingsRoute(
@@ -47,8 +54,15 @@ fun SettingsRoute(
     onDisplaySettings: () -> Unit,
     viewModel: SettingsHomeViewModel = hiltViewModel(),
 ) {
+    val context = LocalContext.current
     val state by viewModel.state.collectAsStateWithLifecycle()
     val error by viewModel.actionError.collectAsStateWithLifecycle()
+    val updateState by viewModel.updateState.collectAsStateWithLifecycle()
+    val selectedMirror by viewModel.selectedMirror.collectAsStateWithLifecycle()
+    val customPrefix by viewModel.customPrefix.collectAsStateWithLifecycle()
+    val blogOrigin by viewModel.blogOrigin.collectAsStateWithLifecycle()
+    var showMirrorDialog by remember { mutableStateOf(false) }
+
     SettingsHomeScreen(
         state = state,
         onCreate = onCreate,
@@ -57,7 +71,35 @@ fun SettingsRoute(
         actionError = error,
         onImport = onImport,
         onDisplaySettings = onDisplaySettings,
+        onCheckUpdate = viewModel::checkUpdate,
+        selectedMirror = selectedMirror,
+        onSelectMirror = { showMirrorDialog = true },
     )
+
+    UpdateDialog(
+        state = updateState,
+        currentMirror = selectedMirror,
+        onDismiss = viewModel::dismissUpdateDialog,
+        onRetry = viewModel::retryUpdate,
+        onStartDownload = viewModel::startDownload,
+        onCancelDownload = viewModel::cancelDownload,
+        onInstall = { file -> AppUpdateInstaller.installApk(context, file) },
+        onOpenBrowser = { url -> AppUpdateInstaller.openInBrowser(context, url) },
+        onSelectMirror = { showMirrorDialog = true },
+    )
+
+    if (showMirrorDialog) {
+        DownloadMirrorDialog(
+            currentMirror = selectedMirror,
+            currentCustomPrefix = customPrefix,
+            currentBlogOrigin = blogOrigin,
+            onDismiss = { showMirrorDialog = false },
+            onConfirm = { mirror, prefix, origin ->
+                viewModel.selectMirror(mirror, prefix, origin)
+                showMirrorDialog = false
+            },
+        )
+    }
 }
 
 @Composable
@@ -69,6 +111,9 @@ fun SettingsHomeScreen(
     actionError: String? = null,
     onImport: () -> Unit = {},
     onDisplaySettings: () -> Unit = {},
+    onCheckUpdate: () -> Unit = {},
+    selectedMirror: DownloadMirror = DownloadMirror.DEFAULT,
+    onSelectMirror: () -> Unit = {},
 ) {
     LazyColumn(
         Modifier.fillMaxSize().testTag("settings_page"),
@@ -268,6 +313,45 @@ fun SettingsHomeScreen(
                                 modifier = Modifier.fillMaxWidth().testTag("settings_display_settings"),
                             ) {
                                 Text("课表设置", fontWeight = FontWeight.Medium)
+                            }
+
+                            OutlinedButton(
+                                onClick = onCheckUpdate,
+                                shape = RoundedCornerShape(14.dp),
+                                modifier = Modifier.fillMaxWidth().testTag("settings_check_update"),
+                            ) {
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically,
+                                ) {
+                                    Text("检查新版本", fontWeight = FontWeight.Medium)
+                                    Text(
+                                        "v${BuildConfig.VERSION_NAME}",
+                                        style = MaterialTheme.typography.labelMedium,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    )
+                                }
+                            }
+
+                            OutlinedButton(
+                                onClick = onSelectMirror,
+                                shape = RoundedCornerShape(14.dp),
+                                modifier = Modifier.fillMaxWidth().testTag("settings_select_mirror"),
+                            ) {
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically,
+                                ) {
+                                    Text("更新下载源", fontWeight = FontWeight.Medium)
+                                    Text(
+                                        selectedMirror.displayName.substringBefore(" ("),
+                                        style = MaterialTheme.typography.labelMedium,
+                                        color = MaterialTheme.colorScheme.primary,
+                                        fontWeight = FontWeight.SemiBold,
+                                    )
+                                }
                             }
                         }
                     }
