@@ -35,6 +35,13 @@ object ImportValidator {
         when (evidence.status) {
             CompletenessStatus.UNKNOWN -> issues += issue(ImportIssueCode.COMPLETENESS_UNKNOWN, ImportIssueStage.COMPLETENESS)
             CompletenessStatus.PARTIAL -> issues += issue(ImportIssueCode.PARTIAL_SOURCE, ImportIssueStage.COMPLETENESS)
+            CompletenessStatus.QUICK_IMPORT_SNAPSHOT -> {
+                if (request.schoolId != "fjnu" || request.sourceId != "fjnu-zhengfang-web" ||
+                    evidence.basis.isBlank() || evidence.pageIndicesRead != listOf(0) ||
+                    evidence.expectedPageCount != null && evidence.expectedPageCount != 1) {
+                    issues += issue(ImportIssueCode.PARTIAL_SOURCE, ImportIssueStage.COMPLETENESS)
+                }
+            }
             CompletenessStatus.VERIFIED_FULL -> {
                 val pageCount = evidence.expectedPageCount
                 val covered = if (pageCount == null) {

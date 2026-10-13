@@ -5,6 +5,8 @@ import androidx.lifecycle.viewModelScope
 import com.example.mobileschedule.data.importer.ParsedZhengfangSchedule
 import com.example.mobileschedule.data.importer.ZhengfangImportPreviewSummary
 import com.example.mobileschedule.data.importer.toPreviewSummary
+import com.example.mobileschedule.data.importer.ZhengfangOnlineRead
+import com.example.mobileschedule.data.model.CompletenessStatus
 import com.example.mobileschedule.data.model.DataErrorCode
 import com.example.mobileschedule.data.model.ImportPreview
 import com.example.mobileschedule.data.model.ImportConfirmation
@@ -47,14 +49,15 @@ internal class OnlineImportPreviewSession(
     private var generation = 0L
     private var previewId: String? = null
 
-    fun show(parsed: ParsedZhengfangSchedule) {
+    fun show(parsed: ParsedZhengfangSchedule, quickImport: Boolean = false) {
         if (mutableState.value is OnlineImportPreviewState.Saving) return
         invalidate()
         val requestedGeneration = generation
         mutableState.value = OnlineImportPreviewState.Loading
         scope.launch {
             try {
-                when (val result = prepare(parsed.request)) {
+                val accepted = if (quickImport) ZhengfangOnlineRead.withQuickImportAcceptance(parsed) ?: parsed else parsed
+                when (val result = prepare(accepted.request)) {
                     is RepoResult.Err -> if (requestedGeneration == generation) {
                         mutableState.value = OnlineImportPreviewState.Error(previewError(result.error.code))
                     }
@@ -65,7 +68,7 @@ internal class OnlineImportPreviewSession(
                             return@launch
                         }
                         val summary = try {
-                            parsed.toPreviewSummary(preview)
+                            accepted.toPreviewSummary(preview)
                         } catch (_: IllegalArgumentException) {
                             discard(preview.previewId)
                             mutableState.value = OnlineImportPreviewState.Error("预览数据与读取结果不一致，请重新读取。")
@@ -73,6 +76,7 @@ internal class OnlineImportPreviewSession(
                         }
                         previewId = preview.previewId
                         mutableState.value = OnlineImportPreviewState.Ready(summary)
+                        if (quickImport && summary.canCommit) confirm()
                     }
                 }
             } catch (cancel: CancellationException) {
@@ -102,7 +106,7 @@ internal class OnlineImportPreviewSession(
         }
     }
 
-    /** Only an explicit UI confirmation enters this path; the repository rechecks every precondition. */
+    /** Manual confirmation or the enabled quick-import preference enters the same transaction path. */
     fun confirm() {
         val current = mutableState.value
         val summary = when (current) {
@@ -110,8 +114,8 @@ internal class OnlineImportPreviewSession(
             is OnlineImportPreviewState.SaveFailed -> if (current.retryable) current.summary else return
             else -> return
         }
-        if (!summary.canCommit || summary.completeness.status !=
-            com.example.mobileschedule.data.model.CompletenessStatus.VERIFIED_FULL) return
+        if (!summary.canCommit || summary.completeness.status !in
+            setOf(CompletenessStatus.VERIFIED_FULL, CompletenessStatus.QUICK_IMPORT_SNAPSHOT)) return
         val scopeToReplace = summary.replacementScope ?: return
         val oldCount = summary.replaceCount ?: return
         if (summary.previewId != previewId) return
@@ -155,7 +159,7 @@ class OnlineImportPreviewViewModel @Inject constructor(repository: ScheduleRepos
         repository::commitImport, repository::setActiveSemester)
     val state: StateFlow<OnlineImportPreviewState> = session.state
 
-    fun show(parsed: ParsedZhengfangSchedule) = session.show(parsed)
+    fun show(parsed: ParsedZhengfangSchedule, quickImport: Boolean = false) = session.show(parsed, quickImport)
     fun invalidate() = session.invalidate()
     fun confirm() = session.confirm()
 }

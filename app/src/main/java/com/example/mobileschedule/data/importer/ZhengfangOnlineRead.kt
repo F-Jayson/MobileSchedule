@@ -4,6 +4,7 @@ import com.example.mobileschedule.data.model.CompletenessEvidence
 import com.example.mobileschedule.data.model.CompletenessStatus
 import com.example.mobileschedule.data.model.ImportIssueStage
 import java.net.URI
+import java.time.LocalDate
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
@@ -19,6 +20,30 @@ data class ZhengfangSourceTerm(val yearStart: Int, val term: Int) {
 object ZhengfangOnlineRead {
     const val LOGIN_URL = "https://jwglxt.fjnu.edu.cn/jwglxt/xtgl/login_slogin.html"
     const val SCHEDULE_URL = "https://jwglxt.fjnu.edu.cn/jwglxt/kbcx/xskbcx_cxXsKb.html?gnmkdm=N2151"
+
+    fun currentTerm(today: LocalDate = LocalDate.now()): ZhengfangSourceTerm = when (today.monthValue) {
+        1 -> ZhengfangSourceTerm(today.year - 1, 1)
+        in 2..8 -> ZhengfangSourceTerm(today.year - 1, 2)
+        else -> ZhengfangSourceTerm(today.year, 1)
+    }
+
+    /** The enabled preference accepts this response as a snapshot; it does not attest full coverage. */
+    fun withQuickImportAcceptance(parsed: ParsedZhengfangSchedule): ParsedZhengfangSchedule? {
+        val request = parsed.request
+        val count = request.sourceObservedCount ?: return null
+        val term = request.sourceTermId ?: return null
+        if (request.schoolId != "fjnu" || request.sourceId != "fjnu-zhengfang-web" || count <= 0 ||
+            request.completeness.status == CompletenessStatus.PARTIAL ||
+            request.completeness.selectedSourceTermId != term || parsed.parsedRowCount != count ||
+            parsed.diagnostics.isNotEmpty() || request.parseIssues.any { it.stage != ImportIssueStage.WARNING }) return null
+        if (request.completeness.status == CompletenessStatus.VERIFIED_FULL) return parsed
+        return parsed.copy(request = request.copy(completeness = request.completeness.copy(
+            status = CompletenessStatus.QUICK_IMPORT_SNAPSHOT,
+            pageIndicesRead = listOf(0),
+            basis = "user-enabled quick import accepts the selected school timetable response snapshot; " +
+                "full-semester coverage is not independently verified",
+        )))
+    }
 
     fun selectTerm(yearText: String, term: Int): ZhengfangSourceTerm? {
         val year = yearText.trim().takeIf { it.matches(Regex("[0-9]{4}")) }?.toIntOrNull()

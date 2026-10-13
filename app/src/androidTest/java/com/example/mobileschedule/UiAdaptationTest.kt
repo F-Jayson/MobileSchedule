@@ -40,7 +40,7 @@ import com.example.mobileschedule.data.model.WeekSchedule
 import com.example.mobileschedule.ui.schedule.CourseDetailUiState
 import com.example.mobileschedule.ui.schedule.ScheduleScreen
 import com.example.mobileschedule.ui.schedule.ScheduleUiState
-import com.example.mobileschedule.ui.settings.SettingsHomeScreen
+import com.example.mobileschedule.ui.settings.ScheduleManagementScreen
 import com.example.mobileschedule.ui.settings.SettingsHomeUiState
 import java.time.LocalDate
 import org.junit.Rule
@@ -78,7 +78,7 @@ class UiAdaptationTest {
                 }
             }
         }
-        compose.onNodeWithTag("schedule_import_top").assertIsDisplayed()
+        compose.onNodeWithTag("schedule_import").assertDoesNotExist()
         compose.onNodeWithTag("week_title").assertIsDisplayed()
         compose.onNodeWithTag("week_switch_bar").assertIsDisplayed()
         compose.onNodeWithTag("overlap_1_1").assertIsDisplayed()
@@ -104,7 +104,7 @@ class UiAdaptationTest {
                 MaterialTheme(colorScheme = darkColorScheme()) {
                     Scaffold { padding ->
                         Surface(Modifier.padding(padding).width(320.dp).height(640.dp).testTag("adaptation_frame")) {
-                            SettingsHomeScreen(SettingsHomeUiState.Ready(listOf(semester), 1),
+                            ScheduleManagementScreen(SettingsHomeUiState.Ready(listOf(semester), 1),
                                 onCreate = {}, onEdit = { edits++ }, onActivate = {},
                                 onImport = { imports++ })
                         }
@@ -112,9 +112,9 @@ class UiAdaptationTest {
                 }
             }
         }
-        compose.onNodeWithTag("settings_page").performScrollToNode(hasTestTag("settings_edit_1"))
+        compose.onNodeWithTag("schedule_management_page").performScrollToNode(hasTestTag("settings_edit_1"))
         compose.onNodeWithTag("settings_edit_1").assertIsDisplayed().performClick()
-        compose.onNodeWithTag("settings_page").performScrollToNode(hasTestTag("settings_import"))
+        compose.onNodeWithTag("schedule_management_page").performScrollToNode(hasTestTag("settings_import"))
         compose.onNodeWithTag("settings_import").assertIsDisplayed().performClick()
         assertEquals(1, edits)
         assertEquals(1, imports)

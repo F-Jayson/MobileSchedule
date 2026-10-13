@@ -177,33 +177,6 @@ fun ScheduleScreen(
             var showWeekPicker by remember { mutableStateOf(false) }
             Column(Modifier.fillMaxSize()) {
                 ScheduleSemesterHeader(state, onImport)
-                if (state.week.schedule.arrangements.isEmpty()) {
-                    Surface(
-                        modifier = Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 4.dp),
-                        shape = RoundedCornerShape(12.dp),
-                        color = MaterialTheme.colorScheme.surfaceContainerLow,
-                    ) {
-                        Row(
-                            Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 8.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                        ) {
-                            Text(
-                                "本周没有课程安排",
-                                modifier = Modifier.weight(1f).testTag("schedule_week_empty"),
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                style = MaterialTheme.typography.bodyMedium,
-                            )
-                            FilledTonalButton(
-                                onClick = onImport,
-                                shape = RoundedCornerShape(16.dp),
-                                contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 12.dp, vertical = 2.dp),
-                                modifier = Modifier.testTag("schedule_import"),
-                            ) {
-                                Text("导入课表", style = MaterialTheme.typography.labelMedium)
-                            }
-                        }
-                    }
-                }
                 Box(Modifier.weight(1f)) {
                     WeekScheduleGrid(
                         state.week, state.today, onCourseClick,
@@ -288,7 +261,6 @@ fun WeekScheduleGrid(
     val config = requireNotNull(week.semester.config)
     val schedule = week.schedule
     val fontScale = LocalDensity.current.fontScale.coerceIn(1f, 1.8f)
-    val rowHeight = sectionHeight * fontScale
     val rulerWidth = (sectionWidth * fontScale.coerceAtMost(1.15f)).coerceAtMost(46.dp)
     val vertical = rememberScrollState()
     val swipeThresholdPx = with(LocalDensity.current) { 64.dp.toPx() }
@@ -312,6 +284,10 @@ fun WeekScheduleGrid(
             },
     ) {
         BoxWithConstraints(Modifier.fillMaxSize()) {
+            val headerHeight = (44.dp * fontScale).coerceAtMost(78.dp)
+            val availableBodyHeight = (maxHeight - headerHeight).coerceAtLeast(0.dp)
+            val rowHeight = (availableBodyHeight / config.totalSections)
+                .coerceIn(52.dp * fontScale, sectionHeight * fontScale)
             val dayWidth = (maxWidth - rulerWidth) / 7
             val gridWidth = dayWidth * 7
             val gridHeight = rowHeight * config.totalSections
@@ -320,7 +296,7 @@ fun WeekScheduleGrid(
             Column(Modifier.fillMaxSize()) {
                 // Header row containing week title button and seven days
                 Row(
-                    Modifier.fillMaxWidth().height((48.dp * fontScale).coerceAtMost(82.dp)),
+                    Modifier.fillMaxWidth().height(headerHeight),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     TextButton(

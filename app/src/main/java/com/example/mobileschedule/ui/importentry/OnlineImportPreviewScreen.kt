@@ -302,6 +302,7 @@ private fun completenessText(status: CompletenessStatus): String = when (status)
     CompletenessStatus.UNKNOWN -> "无法确认已读取完整学期；请核实学校来源总数、完整分页，或与官方完整学期课表逐条核对，当前禁止保存。"
     CompletenessStatus.PARTIAL -> "只读取到部分课表或来源数量不一致，当前禁止保存。"
     CompletenessStatus.VERIFIED_FULL -> "来源课表完整性已核实。"
+    CompletenessStatus.QUICK_IMPORT_SNAPSHOT -> "快速导入已接受本次课表读取结果。"
 }
 
 private fun replacementText(summary: ZhengfangImportPreviewSummary): String {

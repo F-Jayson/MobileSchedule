@@ -8,6 +8,9 @@ import com.example.mobileschedule.data.model.DownloadMirror
 import com.example.mobileschedule.data.model.RepoResult
 import com.example.mobileschedule.data.model.Semester
 import com.example.mobileschedule.data.repository.ScheduleRepository
+import com.example.mobileschedule.data.repository.ScheduleManagementService
+import com.example.mobileschedule.data.preferences.AppPreferencesStore
+import android.net.Uri
 import com.example.mobileschedule.data.updater.AppUpdateChecker
 import com.example.mobileschedule.data.updater.AppUpdateDownloader
 import com.example.mobileschedule.data.updater.DownloadSourceStore
@@ -15,6 +18,9 @@ import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
 import javax.inject.Inject
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.withContext
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -23,6 +29,8 @@ import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 
 sealed interface SettingsHomeUiState {
     data object Loading : SettingsHomeUiState
@@ -34,6 +42,7 @@ sealed interface SettingsHomeUiState {
 class SettingsHomeViewModel @Inject constructor(
     private val repository: ScheduleRepository,
     @param:ApplicationContext private val context: Context,
+    private val management: ScheduleManagementService,
 ) : ViewModel() {
     val state: StateFlow<SettingsHomeUiState> = combine(
         repository.observeSemesters(), repository.observeActiveSemester(),
@@ -48,6 +57,16 @@ class SettingsHomeViewModel @Inject constructor(
 
     private val mutableActionError = MutableStateFlow<String?>(null)
     val actionError: StateFlow<String?> = mutableActionError
+    private val mutableActionMessage = MutableStateFlow<String?>(null)
+    val actionMessage: StateFlow<String?> = mutableActionMessage.asStateFlow()
+    private val mutableManaging = MutableStateFlow(false)
+    val managing: StateFlow<Boolean> = mutableManaging.asStateFlow()
+    private val preferences = AppPreferencesStore(context)
+    private val preferenceWrites = Mutex()
+    private val mutableQuickImport = MutableStateFlow(preferences.isQuickImportEnabled())
+    val quickImport: StateFlow<Boolean> = mutableQuickImport.asStateFlow()
+    private val mutableAutoUpdate = MutableStateFlow(preferences.isAutoUpdateEnabled())
+    val autoUpdate: StateFlow<Boolean> = mutableAutoUpdate.asStateFlow()
 
     var updateChecker: AppUpdateChecker = AppUpdateChecker()
     var updateDownloader: AppUpdateDownloader = AppUpdateDownloader(context)
@@ -67,6 +86,66 @@ class SettingsHomeViewModel @Inject constructor(
 
     private var downloadJob: Job? = null
     private var lastCheckedInfo: AppUpdateInfo? = null
+    private var checkJob: Job? = null
+    private var automaticCheck = false
+    private var startupCheckDone = false
+
+    fun setQuickImport(enabled: Boolean) {
+        viewModelScope.launch {
+            preferenceWrites.withLock {
+                if (withContext(Dispatchers.IO) { preferences.saveQuickImport(enabled) }) mutableQuickImport.value = enabled
+                else mutableActionError.value = "快速导入设置保存失败，请重试。"
+            }
+        }
+    }
+
+    fun setAutoUpdate(enabled: Boolean) {
+        viewModelScope.launch {
+            preferenceWrites.withLock {
+                if (withContext(Dispatchers.IO) { preferences.saveAutoUpdate(enabled) }) {
+                    mutableAutoUpdate.value = enabled
+                    if (!enabled && automaticCheck) checkJob?.cancel()
+                } else mutableActionError.value = "自动检查更新设置保存失败，请重试。"
+            }
+        }
+    }
+
+    fun checkUpdateOnStartup() {
+        if (startupCheckDone) return
+        startupCheckDone = true
+        if (mutableAutoUpdate.value) checkUpdate(automatic = true)
+    }
+
+    fun clearSemester(semesterId: Long) = manage("清除失败，请重试。") {
+        val count = management.clearSemester(semesterId)
+        "已清除 $count 条课程安排"
+    }
+
+    fun exportSemester(semesterId: Long, uri: Uri) = manage("导出失败，请检查保存位置后重试。") {
+        val snapshot = management.exportSemester(semesterId)
+        requireNotNull(context.contentResolver.openOutputStream(uri, "wt")).bufferedWriter(Charsets.UTF_8).use {
+            it.write(snapshot)
+        }
+        "课表已导出"
+    }
+
+    private fun manage(failureMessage: String, action: suspend () -> String) {
+        if (mutableManaging.value) return
+        mutableManaging.value = true
+        mutableActionError.value = null
+        mutableActionMessage.value = null
+        viewModelScope.launch {
+            try {
+                mutableActionMessage.value = withContext(Dispatchers.IO) { action() }
+            } catch (cancel: CancellationException) {
+                throw cancel
+            } catch (_: Exception) {
+                mutableActionError.value = failureMessage
+            } finally {
+                mutableManaging.value = false
+            }
+        }
+    }
 
     fun selectMirror(
         mirror: DownloadMirror,
@@ -88,9 +167,15 @@ class SettingsHomeViewModel @Inject constructor(
         }
     }
 
-    fun checkUpdate() {
-        mutableUpdateState.value = UpdateUiState.Checking
-        viewModelScope.launch {
+    fun checkUpdate(automatic: Boolean = false) {
+        if (mutableUpdateState.value is UpdateUiState.Downloading || mutableUpdateState.value is UpdateUiState.ReadyToInstall) return
+        if (checkJob?.isActive == true) {
+            if (automatic || !automaticCheck) return
+            checkJob?.cancel()
+        }
+        automaticCheck = automatic
+        if (!automatic) mutableUpdateState.value = UpdateUiState.Checking
+        checkJob = viewModelScope.launch {
             val result = updateChecker.checkUpdate(
                 mirror = mutableSelectedMirror.value,
                 blogOrigin = mutableBlogOrigin.value,
@@ -100,10 +185,10 @@ class SettingsHomeViewModel @Inject constructor(
                 if (info.hasUpdate) {
                     mutableUpdateState.value = UpdateUiState.Available(info)
                 } else {
-                    mutableUpdateState.value = UpdateUiState.Latest(info)
+                    if (!automatic) mutableUpdateState.value = UpdateUiState.Latest(info)
                 }
             }.onFailure { error ->
-                mutableUpdateState.value = UpdateUiState.Error(
+                if (!automatic) mutableUpdateState.value = UpdateUiState.Error(
                     message = error.localizedMessage ?: "检查更新失败，请稍后重试。",
                     info = lastCheckedInfo,
                 )
@@ -164,6 +249,7 @@ class SettingsHomeViewModel @Inject constructor(
     }
 
     fun dismissUpdateDialog() {
+        checkJob?.cancel()
         if (mutableUpdateState.value is UpdateUiState.Downloading) {
             cancelDownload()
         } else {

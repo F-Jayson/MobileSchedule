@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -16,11 +17,14 @@ import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.LocalMinimumInteractiveComponentSize
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
@@ -35,15 +39,16 @@ internal fun ScheduleSemesterHeader(
     state: ScheduleUiState.Ready,
     onImport: () -> Unit = {},
 ) {
+    CompositionLocalProvider(LocalMinimumInteractiveComponentSize provides 40.dp) {
     Surface(
-        modifier = Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 6.dp),
+        modifier = Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 4.dp).testTag("schedule_semester_header"),
         shape = RoundedCornerShape(16.dp),
         color = MaterialTheme.colorScheme.surfaceContainerLow,
         tonalElevation = 1.dp,
     ) {
-        Column(Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 10.dp)) {
+        Column(Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 3.dp)) {
             Row(
-                Modifier.fillMaxWidth(),
+                Modifier.fillMaxWidth().heightIn(min = if (state.week.schedule.arrangements.isEmpty()) 42.dp else 34.dp),
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.SpaceBetween,
             ) {
@@ -73,18 +78,26 @@ internal fun ScheduleSemesterHeader(
                         )
                         is WeekPosition.InSemester -> Unit
                     }
+                    if (state.week.schedule.arrangements.isEmpty()) {
+                        Text(
+                            "本周没有课程安排",
+                            modifier = Modifier.padding(top = 4.dp).testTag("schedule_week_empty"),
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            style = MaterialTheme.typography.bodySmall,
+                        )
+                    }
                 }
-                OutlinedButton(
+                if (state.week.schedule.arrangements.isEmpty()) FilledTonalButton(
                     onClick = onImport,
                     shape = RoundedCornerShape(20.dp),
-                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.5f)),
-                    contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp),
-                    modifier = Modifier.testTag("schedule_import_top"),
+                    contentPadding = PaddingValues(horizontal = 12.dp, vertical = 0.dp),
+                    modifier = Modifier.padding(start = 8.dp).testTag("schedule_import"),
                 ) {
-                    Text("导入", fontWeight = FontWeight.SemiBold, style = MaterialTheme.typography.labelMedium)
+                    Text("导入课表", fontWeight = FontWeight.SemiBold, style = MaterialTheme.typography.labelMedium)
                 }
             }
         }
+    }
     }
 }
 
@@ -97,15 +110,17 @@ internal fun ScheduleWeekControls(
 ) {
     val schedule = state.week.schedule
     val totalWeeks = requireNotNull(state.week.semester.config).totalWeeks
+    val buttonHeight = if (LocalDensity.current.fontScale > 1.2f) 48.dp else 36.dp
 
+    CompositionLocalProvider(LocalMinimumInteractiveComponentSize provides buttonHeight) {
     Surface(
-        modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 4.dp),
+        modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 3.dp),
         shape = RoundedCornerShape(20.dp),
         color = MaterialTheme.colorScheme.surfaceContainer,
         tonalElevation = 2.dp,
     ) {
         Row(
-            Modifier.fillMaxWidth().padding(horizontal = 6.dp, vertical = 3.dp).testTag("week_switch_bar"),
+            Modifier.fillMaxWidth().padding(horizontal = 6.dp).testTag("week_switch_bar"),
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically,
         ) {
@@ -117,7 +132,7 @@ internal fun ScheduleWeekControls(
                     containerColor = MaterialTheme.colorScheme.surface,
                     contentColor = MaterialTheme.colorScheme.onSurface,
                 ),
-                modifier = Modifier.weight(1f).testTag("previous_week"),
+                modifier = Modifier.weight(1f).height(buttonHeight).testTag("previous_week"),
                 contentPadding = PaddingValues(horizontal = 4.dp),
             ) {
                 Text("‹ 上周", maxLines = 1, fontWeight = FontWeight.Medium, style = MaterialTheme.typography.labelSmall)
@@ -132,7 +147,7 @@ internal fun ScheduleWeekControls(
                         containerColor = MaterialTheme.colorScheme.primaryContainer,
                         contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
                     ),
-                    modifier = Modifier.weight(1f).padding(horizontal = 4.dp).testTag("return_to_current"),
+                    modifier = Modifier.weight(1f).padding(horizontal = 4.dp).height(buttonHeight).testTag("return_to_current"),
                     contentPadding = PaddingValues(horizontal = 4.dp),
                 ) {
                     Text("回到本周", maxLines = 1, fontWeight = FontWeight.SemiBold, style = MaterialTheme.typography.labelSmall)
@@ -145,7 +160,7 @@ internal fun ScheduleWeekControls(
                         containerColor = MaterialTheme.colorScheme.surface,
                         contentColor = MaterialTheme.colorScheme.onSurface,
                     ),
-                    modifier = Modifier.weight(1f).padding(horizontal = 4.dp).testTag("return_to_boundary"),
+                    modifier = Modifier.weight(1f).padding(horizontal = 4.dp).height(buttonHeight).testTag("return_to_boundary"),
                     contentPadding = PaddingValues(horizontal = 4.dp),
                 ) {
                     Text("到第1周", maxLines = 1, fontWeight = FontWeight.Medium, style = MaterialTheme.typography.labelSmall)
@@ -158,7 +173,7 @@ internal fun ScheduleWeekControls(
                         containerColor = MaterialTheme.colorScheme.surface,
                         contentColor = MaterialTheme.colorScheme.onSurface,
                     ),
-                    modifier = Modifier.weight(1f).padding(horizontal = 4.dp).testTag("return_to_boundary"),
+                    modifier = Modifier.weight(1f).padding(horizontal = 4.dp).height(buttonHeight).testTag("return_to_boundary"),
                     contentPadding = PaddingValues(horizontal = 4.dp),
                 ) {
                     Text("到末周", maxLines = 1, fontWeight = FontWeight.Medium, style = MaterialTheme.typography.labelSmall)
@@ -173,12 +188,13 @@ internal fun ScheduleWeekControls(
                     containerColor = MaterialTheme.colorScheme.surface,
                     contentColor = MaterialTheme.colorScheme.onSurface,
                 ),
-                modifier = Modifier.weight(1f).testTag("next_week"),
+                modifier = Modifier.weight(1f).height(buttonHeight).testTag("next_week"),
                 contentPadding = PaddingValues(horizontal = 4.dp),
             ) {
                 Text("下周 ›", maxLines = 1, fontWeight = FontWeight.Medium, style = MaterialTheme.typography.labelSmall)
             }
         }
+    }
     }
 }
 

@@ -25,7 +25,7 @@ data class ImportCandidate(
     val weeks: Set<Int>?,
 )
 
-enum class CompletenessStatus { UNKNOWN, PARTIAL, VERIFIED_FULL }
+enum class CompletenessStatus { UNKNOWN, PARTIAL, VERIFIED_FULL, QUICK_IMPORT_SNAPSHOT }
 
 data class CompletenessEvidence(
     val status: CompletenessStatus,

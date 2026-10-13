@@ -37,7 +37,7 @@ import com.example.mobileschedule.ui.settings.ConfigEditorState
 import com.example.mobileschedule.ui.settings.SectionTimeText
 import com.example.mobileschedule.ui.settings.SemesterFormInput
 import com.example.mobileschedule.ui.settings.SettingsConfigScreen
-import com.example.mobileschedule.ui.settings.SettingsHomeScreen
+import com.example.mobileschedule.ui.settings.ScheduleManagementScreen
 import com.example.mobileschedule.ui.settings.SettingsHomeUiState
 import java.time.LocalDate
 import org.junit.Assert.assertEquals
@@ -54,7 +54,7 @@ class SettingsConfigUiTest {
         var create = 0
         compose.setContent {
             TestHost {
-                SettingsHomeScreen(SettingsHomeUiState.Ready(emptyList(), null),
+                ScheduleManagementScreen(SettingsHomeUiState.Ready(emptyList(), null),
                     onCreate = { create++ }, onEdit = {}, onActivate = {})
             }
         }

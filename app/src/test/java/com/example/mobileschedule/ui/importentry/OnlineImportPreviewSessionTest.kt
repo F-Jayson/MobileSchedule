@@ -47,6 +47,64 @@ class OnlineImportPreviewSessionTest {
     private fun receipt(saved: Int = 1) = ImportReceipt("batch", SourceScope("fjnu",
         "fjnu-zhengfang-web", "xnm=2026;xqm=3"), 7, 2, saved)
 
+    @Test fun quickImportSavesAndActivatesWithoutPreviewConfirmation() = runTest {
+        val source = parsed()
+        var commits = 0
+        var activeId: Long? = null
+        val session = OnlineImportPreviewSession(this,
+            prepare = { request -> RepoResult.Ok(ImportValidator.buildPreview("quick", request, config, null, 2)) },
+            discard = { RepoResult.Ok(Unit) },
+            commit = { _, confirmation ->
+                assertEquals(1, confirmation.validCount)
+                assertEquals(2, confirmation.replaceCount)
+                commits++
+                RepoResult.Ok(receipt())
+            },
+            activate = { activeId = it; RepoResult.Ok(Unit) })
+        session.show(source, quickImport = true)
+        runCurrent()
+        assertTrue(session.state.value is OnlineImportPreviewState.Saved)
+        assertEquals(1, commits)
+        assertEquals(7L, activeId)
+        session.confirm()
+        runCurrent()
+        assertEquals(1, commits)
+    }
+
+    @Test fun quickImportRejectsPartialAndMalformedSnapshots() = runTest {
+        var commits = 0
+        val source = parsed()
+        val session = OnlineImportPreviewSession(this,
+            prepare = { request -> RepoResult.Ok(ImportValidator.buildPreview("blocked", request, config, null, 2)) },
+            discard = { RepoResult.Ok(Unit) },
+            commit = { _, _ -> commits++; RepoResult.Ok(receipt()) },
+            activate = { RepoResult.Ok(Unit) })
+        session.show(source.copy(request = source.request.copy(completeness = source.request.completeness.copy(
+            status = CompletenessStatus.PARTIAL))), quickImport = true)
+        runCurrent()
+        assertEquals(0, commits)
+        session.show(source.copy(request = source.request.copy(candidates = source.request.candidates.map {
+            it.copy(endSection = 99)
+        })), quickImport = true)
+        runCurrent()
+        assertEquals(0, commits)
+        assertFalse((session.state.value as OnlineImportPreviewState.Ready).summary.canCommit)
+    }
+
+    @Test fun quickImportWriteFailureWaitsForUserRetry() = runTest {
+        val source = parsed()
+        var commits = 0
+        val session = OnlineImportPreviewSession(this,
+            prepare = { request -> RepoResult.Ok(ImportValidator.buildPreview("quick-fail", request, config, null, 2)) },
+            discard = { RepoResult.Ok(Unit) },
+            commit = { _, _ -> commits++; RepoResult.Err(DataError(DataErrorCode.STORAGE_WRITE_FAILED)) },
+            activate = { RepoResult.Ok(Unit) })
+        session.show(source, quickImport = true)
+        runCurrent()
+        assertTrue(session.state.value is OnlineImportPreviewState.SaveFailed)
+        assertEquals(1, commits)
+    }
+
     @Test fun schoolResponseBecomesBlockedPreviewWithSourceRowsAndReplacementScope() = runTest {
         val source = parsed()
         val session = OnlineImportPreviewSession(this,

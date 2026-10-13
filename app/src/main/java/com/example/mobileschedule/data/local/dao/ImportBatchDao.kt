@@ -14,6 +14,9 @@ interface ImportBatchDao {
     @Query("SELECT * FROM import_batches WHERE id = :batchId")
     suspend fun getBatch(batchId: String): ImportBatchEntity?
 
+    @Query("DELETE FROM import_batches WHERE semesterId = :semesterId")
+    suspend fun deleteSemesterBatches(semesterId: Long)
+
     /** Includes an unbound semester as one null-scope row; no second query can race a commit. */
     @Query("""
         SELECT s.id AS semesterId, b.schoolId, b.sourceId, b.sourceTermId, b.sourceTermLabel,

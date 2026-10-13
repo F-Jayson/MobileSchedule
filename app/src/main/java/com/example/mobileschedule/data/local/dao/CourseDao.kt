@@ -30,6 +30,13 @@ interface CourseDao {
     @Query("SELECT * FROM courses WHERE semesterId = :semesterId ORDER BY dayOfWeek, startSection, endSection, id")
     fun observeSemesterCourses(semesterId: Long): Flow<List<CourseWithWeeks>>
 
+    @Transaction
+    @Query("SELECT * FROM courses WHERE semesterId = :semesterId ORDER BY dayOfWeek, startSection, endSection, id")
+    suspend fun getSemesterCourses(semesterId: Long): List<CourseWithWeeks>
+
+    @Query("DELETE FROM courses WHERE semesterId = :semesterId")
+    suspend fun deleteSemesterCourses(semesterId: Long): Int
+
     /** Counts each affected arrangement once, including a row with both week and section violations. */
     @Query("""
         SELECT COUNT(*) FROM courses AS c WHERE c.semesterId = :semesterId AND (

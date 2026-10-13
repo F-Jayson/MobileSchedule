@@ -30,6 +30,9 @@ import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
+import androidx.compose.ui.platform.LocalContext
+import com.example.mobileschedule.data.preferences.AppPreferencesStore
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
@@ -50,15 +53,18 @@ fun ImportIntroRoute(
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     val activeId = (state as? SettingsHomeUiState.Ready)?.activeId
+    val context = LocalContext.current
+    val quickImport = remember { AppPreferencesStore(context).isQuickImportEnabled() }
     ImportIntroScreen(
         state = state,
         onBack = onBack,
         onConfigure = { onConfigure(activeId) },
         onContinue = { activeId?.let(onContinue) },
+        quickImport = quickImport,
     )
 }
 
-/** Entry to school reading and validation preview. Saving remains a later confirmation flow. */
+/** Entry to the school timetable workflow with the user's selected import preference. */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ImportIntroScreen(
@@ -66,6 +72,7 @@ fun ImportIntroScreen(
     onBack: () -> Unit,
     onConfigure: () -> Unit,
     onContinue: () -> Unit,
+    quickImport: Boolean = false,
 ) {
     Scaffold(
         modifier = Modifier.fillMaxSize().testTag("import_intro"),
@@ -122,7 +129,8 @@ fun ImportIntroScreen(
                         color = MaterialTheme.colorScheme.onSurface,
                     )
                     Text(
-                        "导入时需由你在学校页面完成本人登录、选择来源学期，再预览课程安排并确认保存。",
+                        if (quickImport) "请在学校页面完成本人登录，学年和学期已自动选择；点击解析课表后自动导入并返回课表。"
+                        else "导入时需由你在学校页面完成本人登录、选择来源学期，再预览课程安排并确认保存。",
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
@@ -139,7 +147,8 @@ fun ImportIntroScreen(
                 Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                     Text("导入流程规范", fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleSmall)
                     Text(
-                        "登录并读取后会展示课程安排预览和校验原因。确认完整学期、核对替换范围后才可保存；取消或保存失败不会改变已有本地课程。",
+                        if (quickImport) "快速导入会保存本次解析通过的课程，替换同来源学期的已有课程；解析或保存失败时可查看原因并重试。"
+                        else "登录并读取后会展示课程安排预览和校验原因。确认完整学期、核对替换范围后才可保存；取消或保存失败不会改变已有本地课程。",
                         modifier = Modifier.testTag("import_read_only"),
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         style = MaterialTheme.typography.bodyMedium,

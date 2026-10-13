@@ -52,6 +52,7 @@ import com.example.mobileschedule.data.importer.ZhengfangOnlineRead
 import com.example.mobileschedule.data.importer.ZhengfangParseErrorCode
 import com.example.mobileschedule.data.importer.ZhengfangParseException
 import com.example.mobileschedule.data.importer.ZhengfangSourceTerm
+import com.example.mobileschedule.data.preferences.AppPreferencesStore
 import java.net.URI
 import kotlinx.coroutines.delay
 
@@ -71,15 +72,18 @@ fun ZhengfangOnlineReadRoute(
     viewModel: OnlineImportPreviewViewModel = hiltViewModel(),
 ) {
     val previewState by viewModel.state.collectAsStateWithLifecycle()
+    val context = LocalContext.current
+    val quickImport = remember { AppPreferencesStore(context).isQuickImportEnabled() }
     ZhengfangOnlineReadScreen(targetSemesterId, onExit,
         previewState = previewState,
-        onPreparePreview = viewModel::show,
+        quickImport = quickImport,
+        onPreparePreview = { viewModel.show(it, quickImport) },
         onInvalidatePreview = viewModel::invalidate,
         onConfirmPreview = viewModel::confirm,
         onOpenSchedule = onOpenSchedule)
 }
 
-/** The user enters credentials only in the school WebView. No JavaScript bridge or database write exists here. */
+/** The user enters credentials only in the school WebView; parsed data goes through the import session. */
 @SuppressLint("SetJavaScriptEnabled")
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -92,16 +96,22 @@ fun ZhengfangOnlineReadScreen(
     onInvalidatePreview: () -> Unit,
     onConfirmPreview: () -> Unit = {},
     onOpenSchedule: () -> Unit = {},
+    quickImport: Boolean = false,
 ) {
     val context = LocalContext.current
-    var yearText by remember { mutableStateOf("") }
-    var termNumber by remember { mutableIntStateOf(1) }
+    val currentTerm = remember { ZhengfangOnlineRead.currentTerm() }
+    var yearText by remember { mutableStateOf(if (quickImport) currentTerm.yearStart.toString() else "") }
+    var termNumber by remember { mutableIntStateOf(if (quickImport) currentTerm.term else 1) }
     var pageUrl by remember { mutableStateOf("") }
     var pageLoading by remember { mutableStateOf(true) }
     var readState by remember { mutableStateOf<OnlineReadState>(OnlineReadState.Idle) }
     var generation by remember { mutableIntStateOf(0) }
     var pendingTerm by remember { mutableStateOf<ZhengfangSourceTerm?>(null) }
-    var showingPreview by remember { mutableStateOf(false) }
+    var showingPreview by remember {
+        mutableStateOf(previewState is OnlineImportPreviewState.Saving ||
+            previewState is OnlineImportPreviewState.Saved ||
+            quickImport && previewState != OnlineImportPreviewState.Idle)
+    }
     var previewRead by remember { mutableStateOf<OnlineReadState.Ready?>(null) }
     var leaving by remember { mutableStateOf(false) }
     val selected = ZhengfangOnlineRead.selectTerm(yearText, termNumber)
@@ -246,6 +256,10 @@ fun ZhengfangOnlineReadScreen(
         previewRead = null
         readState = OnlineReadState.Idle
     }
+    LaunchedEffect(previewState, showingPreview) {
+        val saved = previewState as? OnlineImportPreviewState.Saved
+        if (quickImport && showingPreview && saved != null && saved.activationError == null) finishToSchedule()
+    }
     BackHandler {
         when {
             showingPreview && previewState is OnlineImportPreviewState.Saving -> Unit
@@ -258,6 +272,17 @@ fun ZhengfangOnlineReadScreen(
     }
 
     if (showingPreview) {
+        if (quickImport && (previewState is OnlineImportPreviewState.Loading ||
+                previewState is OnlineImportPreviewState.Saving ||
+                previewState is OnlineImportPreviewState.Saved && previewState.activationError == null)) {
+            Column(Modifier.fillMaxSize().testTag("quick_import_progress"),
+                verticalArrangement = Arrangement.Center,
+                horizontalAlignment = androidx.compose.ui.Alignment.CenterHorizontally) {
+                CircularProgressIndicator()
+                Text("正在导入课表…", Modifier.padding(top = 16.dp))
+            }
+            return
+        }
         OnlineImportPreviewScreen(previewState, onBack = ::closePreview, onReadAgain = ::closePreview,
             onConfirm = onConfirmPreview, onOpenSchedule = ::finishToSchedule,
             onConfirmFullCoverage = ::verifyCurrentRead)
@@ -275,6 +300,8 @@ fun ZhengfangOnlineReadScreen(
             verticalArrangement = Arrangement.spacedBy(6.dp)) {
             Text("请在下方学校页面自行登录和完成验证。账号、密码与验证码只输入在学校页面。",
                 style = MaterialTheme.typography.bodySmall)
+            if (quickImport) Text("快速导入：已自动选择当前学年和学期，解析完成后保存并返回课表。",
+                style = MaterialTheme.typography.bodySmall, modifier = Modifier.testTag("quick_import_hint"))
             Text(if (pageUrl.isSchoolHost()) "当前为福建师大教务域名" else "当前为登录跳转页或尚未打开学校页面",
                 style = MaterialTheme.typography.labelSmall)
             OutlinedTextField(value = yearText, onValueChange = {
@@ -315,12 +342,13 @@ fun ZhengfangOnlineReadScreen(
                     webView.postUrl(ZhengfangOnlineRead.SCHEDULE_URL,
                         ZhengfangOnlineRead.postBody(sourceTerm).toByteArray(Charsets.UTF_8))
                 }, enabled = selected != null && pageUrl.isSchoolHost() && !pageLoading && !reading,
-                    modifier = Modifier.testTag("online_read_button")) { Text("读取所选学期") }
+                    modifier = Modifier.testTag("online_read_button")) { Text("解析课表") }
                 if (reading) TextButton(onClick = ::cancelRead,
                     modifier = Modifier.testTag("online_cancel")) { Text("取消读取") }
             }
             when (val state = readState) {
-                OnlineReadState.Idle -> Text("读取前请确认学校网页已登录；学年和学期为请求参数，完整性尚待核实。")
+                OnlineReadState.Idle -> Text(if (quickImport) "登录完成后点击“解析课表”，课程将自动导入。"
+                    else "读取前请确认学校网页已登录；学年和学期为请求参数，完整性尚待核实。")
                 OnlineReadState.Reading -> Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     CircularProgressIndicator()
                     Text("正在读取并解析课表…")
