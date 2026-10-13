@@ -9,6 +9,18 @@ import javax.inject.Inject
 import kotlinx.serialization.json.*
 
 class ScheduleManagementService @Inject constructor(private val database: AppDatabase) {
+    suspend fun deleteSemester(semesterId: Long): Unit = database.withTransaction {
+        val semesters = database.semesterDao()
+        requireNotNull(semesters.getSemester(semesterId)) { "Semester no longer exists" }
+        val wasActive = semesters.getActiveSemesterId() == semesterId
+        database.courseDao().deleteSemesterCourses(semesterId)
+        database.importBatchDao().deleteSemesterBatches(semesterId)
+        semesters.deleteSourceBindings(semesterId)
+        // The calendar and section times belong to the semester and cascade with its deletion.
+        semesters.deleteSemester(semesterId)
+        if (wasActive) semesters.setActiveSemester(semesters.getLatestSemesterId())
+    }
+
     suspend fun clearSemester(semesterId: Long): Int = database.withTransaction {
         requireNotNull(database.semesterDao().getSemester(semesterId)) { "Semester no longer exists" }
         val removed = database.courseDao().deleteSemesterCourses(semesterId)

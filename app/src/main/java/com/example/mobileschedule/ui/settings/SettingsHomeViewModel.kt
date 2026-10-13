@@ -121,6 +121,11 @@ class SettingsHomeViewModel @Inject constructor(
         "已清除 $count 条课程安排"
     }
 
+    fun deleteSemester(semesterId: Long) = manage("删除学期失败，请重试。") {
+        management.deleteSemester(semesterId)
+        "学期已删除"
+    }
+
     fun exportSemester(semesterId: Long, uri: Uri) = manage("导出失败，请检查保存位置后重试。") {
         val snapshot = management.exportSemester(semesterId)
         requireNotNull(context.contentResolver.openOutputStream(uri, "wt")).bufferedWriter(Charsets.UTF_8).use {

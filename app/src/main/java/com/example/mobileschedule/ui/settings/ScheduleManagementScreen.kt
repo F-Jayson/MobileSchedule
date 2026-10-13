@@ -37,11 +37,23 @@ fun ScheduleManagementRoute(
         exportSemesterId = null
         if (uri != null && semesterId != null) viewModel.exportSemester(semesterId, uri)
     }
-    ScheduleManagementScreen(state, onBack, onCreate, onEdit, viewModel::activate, onImport,
-        viewModel::clearSemester, { id ->
+    ScheduleManagementScreen(
+        state = state,
+        onBack = onBack,
+        onCreate = onCreate,
+        onEdit = onEdit,
+        onActivate = viewModel::activate,
+        onImport = onImport,
+        onClear = viewModel::clearSemester,
+        onExport = { id ->
             exportSemesterId = id
             exporter.launch("课程表-$id.json")
-        }, busy, error, message)
+        },
+        busy = busy,
+        actionError = error,
+        actionMessage = message,
+        onDelete = viewModel::deleteSemester,
+    )
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -58,8 +70,25 @@ fun ScheduleManagementScreen(
     busy: Boolean = false,
     actionError: String? = null,
     actionMessage: String? = null,
+    onDelete: (Long) -> Unit = {},
 ) {
     var clearing by remember { mutableStateOf<Semester?>(null) }
+    var deleting by remember { mutableStateOf<Semester?>(null) }
+    deleting?.let { semester ->
+        val activeHint = if (state is SettingsHomeUiState.Ready && state.activeId == semester.id) {
+            "当前学期删除后，将切换到最近新建的其他学期；没有其他学期时显示空课表。"
+        } else ""
+        AlertDialog(onDismissRequest = { deleting = null },
+            modifier = Modifier.testTag("management_delete_dialog"),
+            title = { Text("删除学期") },
+            text = { Text("将删除“${semester.displayName}”及其全部课程安排、导入记录、学期日历和节次配置。此操作无法撤销。$activeHint",
+                modifier = Modifier.testTag("management_delete_message")) },
+            confirmButton = { TextButton(onClick = { deleting = null; onDelete(semester.id) },
+                enabled = !busy, modifier = Modifier.testTag("management_confirm_delete"),
+                colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.error)) { Text("删除") } },
+            dismissButton = { TextButton(onClick = { deleting = null },
+                modifier = Modifier.testTag("management_cancel_delete")) { Text("取消") } })
+    }
     clearing?.let { semester ->
         AlertDialog(onDismissRequest = { clearing = null },
             title = { Text("清除课程安排") },
@@ -118,6 +147,9 @@ fun ScheduleManagementScreen(
                                     OutlinedButton(onClick = { clearing = semester }, enabled = !busy,
                                         modifier = Modifier.weight(1f).testTag("management_clear_${semester.id}")) { Text("清除课表") }
                                 }
+                                TextButton(onClick = { deleting = semester }, enabled = !busy,
+                                    modifier = Modifier.align(Alignment.End).testTag("management_delete_${semester.id}"),
+                                    colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.error)) { Text("删除学期") }
                             }
                         }
                     }

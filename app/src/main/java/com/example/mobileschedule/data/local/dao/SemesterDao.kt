@@ -46,6 +46,15 @@ interface SemesterDao {
     @Query("DELETE FROM source_bindings WHERE semesterId = :semesterId")
     suspend fun deleteSourceBindings(semesterId: Long)
 
+    @Query("DELETE FROM semesters WHERE id = :semesterId")
+    suspend fun deleteSemester(semesterId: Long)
+
+    @Query("SELECT activeSemesterId FROM app_settings WHERE id = 0")
+    suspend fun getActiveSemesterId(): Long?
+
+    @Query("SELECT id FROM semesters ORDER BY id DESC LIMIT 1")
+    suspend fun getLatestSemesterId(): Long?
+
     @Query("UPDATE semester_configs SET revision = revision + 1 WHERE semesterId = :semesterId")
     suspend fun advanceConfigRevision(semesterId: Long)
 

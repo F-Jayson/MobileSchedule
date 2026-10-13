@@ -127,7 +127,16 @@ fun ZhengfangOnlineReadScreen(
             webChromeClient = object : WebChromeClient() {}
             webViewClient = object : WebViewClient() {
                 override fun shouldOverrideUrlLoading(view: WebView, request: WebResourceRequest): Boolean =
-                    request.url.scheme != "https"
+                    navigate(view, request.url.toString(), request.isForMainFrame)
+
+                override fun shouldOverrideUrlLoading(view: WebView, url: String): Boolean = navigate(view, url, true)
+
+                private fun navigate(view: WebView, url: String, mainFrame: Boolean): Boolean {
+                    val secureUrl = SchoolLoginNavigation.httpsUrl(url) ?: return true
+                    if (secureUrl == url) return false
+                    if (mainFrame) view.loadUrl(secureUrl)
+                    return true
+                }
 
                 override fun onPageStarted(view: WebView, url: String, favicon: Bitmap?) {
                     pageLoading = true
