@@ -33,6 +33,7 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.foundation.clickable
 import com.example.mobileschedule.data.model.AppUpdateInfo
 import com.example.mobileschedule.data.model.DownloadMirror
+import com.example.mobileschedule.data.updater.DeviceAbiMatcher
 import java.io.File
 import java.util.Locale
 
@@ -144,12 +145,27 @@ fun UpdateDialog(
                                 color = MaterialTheme.colorScheme.primary,
                                 fontWeight = FontWeight.SemiBold,
                             )
-                            state.info.apkSize?.let { size ->
-                                Text(
-                                    formatFileSize(size),
-                                    style = MaterialTheme.typography.labelSmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                )
+                            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                                state.info.targetAbi?.let { abi ->
+                                    Surface(
+                                        shape = RoundedCornerShape(4.dp),
+                                        color = MaterialTheme.colorScheme.secondaryContainer,
+                                    ) {
+                                        Text(
+                                            DeviceAbiMatcher.getAbiDisplayName(abi),
+                                            style = MaterialTheme.typography.labelSmall,
+                                            color = MaterialTheme.colorScheme.onSecondaryContainer,
+                                            modifier = Modifier.padding(horizontal = 4.dp, vertical = 2.dp),
+                                        )
+                                    }
+                                }
+                                state.info.apkSize?.let { size ->
+                                    Text(
+                                        formatFileSize(size),
+                                        style = MaterialTheme.typography.labelSmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    )
+                                }
                             }
                         }
 

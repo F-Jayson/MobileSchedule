@@ -15,6 +15,7 @@ data class AppUpdateInfo(
     val hasUpdate: Boolean,
     val apkSize: Long? = null,
     val publishedAt: String? = null,
+    val targetAbi: String? = null,
 )
 
 /**

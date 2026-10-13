@@ -58,9 +58,30 @@ class AppUpdateChecker(
                 val tagName = json.optString("versionName", "").trim()
                 val body = json.optString("releaseNotes", "暂无更新说明。").ifBlank { "暂无更新说明。" }
                 val rawDownloadUrl = json.optString("downloadUrl", "").trim()
-                val apkUrl = DownloadMirror.BLOG.buildDownloadUrl(rawDownloadUrl, blogOrigin = blogOrigin)
-                val apkSize = json.optLong("apkSize", 0L).takeIf { it > 0 }
+                val fallbackApkUrl = DownloadMirror.BLOG.buildDownloadUrl(rawDownloadUrl, blogOrigin = blogOrigin).takeIf { it.isNotBlank() }
+                val fallbackApkSize = json.optLong("apkSize", 0L).takeIf { it > 0 }
                 val publishedAt = json.optString("publishedAt").takeIf { it.isNotBlank() }
+
+                val assetsArray = json.optJSONArray("assets")
+                val assetsList = mutableListOf<UpdateAsset>()
+                if (assetsArray != null) {
+                    for (i in 0 until assetsArray.length()) {
+                        val item = assetsArray.optJSONObject(i) ?: continue
+                        val abi = item.optString("abi", "universal")
+                        val fileName = item.optString("fileName", "")
+                        val rawUrl = item.optString("downloadUrl", "")
+                        val fullUrl = DownloadMirror.BLOG.buildDownloadUrl(rawUrl, blogOrigin = blogOrigin)
+                        val size = item.optLong("apkSize", 0L).takeIf { it > 0 }
+                        if (fullUrl.isNotBlank()) {
+                            assetsList.add(UpdateAsset(abi, fileName, fullUrl, size))
+                        }
+                    }
+                }
+
+                val bestAsset = DeviceAbiMatcher.findBestAsset(assetsList)
+                val finalDownloadUrl = bestAsset?.downloadUrl ?: fallbackApkUrl
+                val finalApkSize = bestAsset?.byteSize ?: fallbackApkSize
+                val targetAbi = bestAsset?.let { DeviceAbiMatcher.normalizeAbi(it.abi) }
 
                 val hasUpdate = VersionComparator.isNewer(tagName, currentVersion)
                 val updateInfo = AppUpdateInfo(
@@ -68,11 +89,12 @@ class AppUpdateChecker(
                     latestVersionName = tagName.removePrefix("v").removePrefix("V"),
                     releaseTitle = "v$tagName 课表新版本",
                     releaseNotes = body,
-                    downloadUrl = apkUrl,
+                    downloadUrl = finalDownloadUrl,
                     browserUrl = "$base/api/app/schedule/download",
                     hasUpdate = hasUpdate,
-                    apkSize = apkSize,
+                    apkSize = finalApkSize,
                     publishedAt = publishedAt,
+                    targetAbi = targetAbi,
                 )
                 Result.success(updateInfo)
             } else if (responseCode == HttpURLConnection.HTTP_NOT_FOUND) {
@@ -115,20 +137,25 @@ class AppUpdateChecker(
                 val publishedAt = json.optString("published_at").takeIf { it.isNotBlank() }
 
                 val assets = json.optJSONArray("assets") ?: JSONArray()
-                var apkUrl: String? = null
-                var apkSize: Long? = null
+                val assetsList = mutableListOf<UpdateAsset>()
 
                 for (i in 0 until assets.length()) {
                     val asset = assets.optJSONObject(i) ?: continue
                     val assetName = asset.optString("name", "")
                     if (assetName.endsWith(".apk", ignoreCase = true)) {
-                        apkUrl = asset.optString("browser_download_url").takeIf { it.isNotBlank() }
-                        apkSize = asset.optLong("size", 0L).takeIf { it > 0 }
-                        if (assetName.contains("arm64", ignoreCase = true) || assetName.contains("universal", ignoreCase = true)) {
-                            break
+                        val assetUrl = asset.optString("browser_download_url")
+                        val size = asset.optLong("size", 0L).takeIf { it > 0 }
+                        if (assetUrl.isNotBlank()) {
+                            val abi = DeviceAbiMatcher.normalizeAbi(assetName)
+                            assetsList.add(UpdateAsset(abi, assetName, assetUrl, size))
                         }
                     }
                 }
+
+                val bestAsset = DeviceAbiMatcher.findBestAsset(assetsList)
+                val finalDownloadUrl = bestAsset?.downloadUrl
+                val finalApkSize = bestAsset?.byteSize
+                val targetAbi = bestAsset?.let { DeviceAbiMatcher.normalizeAbi(it.abi) }
 
                 val hasUpdate = VersionComparator.isNewer(tagName, currentVersion)
                 val updateInfo = AppUpdateInfo(
@@ -136,11 +163,12 @@ class AppUpdateChecker(
                     latestVersionName = tagName.removePrefix("v").removePrefix("V"),
                     releaseTitle = title,
                     releaseNotes = body,
-                    downloadUrl = apkUrl,
+                    downloadUrl = finalDownloadUrl,
                     browserUrl = htmlUrl,
                     hasUpdate = hasUpdate,
-                    apkSize = apkSize,
+                    apkSize = finalApkSize,
                     publishedAt = publishedAt,
+                    targetAbi = targetAbi,
                 )
                 Result.success(updateInfo)
             } else if (responseCode == HttpURLConnection.HTTP_NOT_FOUND) {
