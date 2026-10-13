@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Icon
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarDefaults
 import androidx.compose.material3.NavigationBarItem
@@ -52,10 +53,17 @@ fun MobileScheduleApp() {
         bottomBar = {
             if (Destination.entries.any { it.route == entry?.destination?.route }) {
                 Column(Modifier.fillMaxWidth()
-                    .background(NavigationBarDefaults.containerColor)
+                    .background(MaterialTheme.colorScheme.surface)
                     .navigationBarsPadding()) {
-                    NavigationBar(modifier = Modifier.height(64.dp).testTag("main_bottom_navigation"),
-                        windowInsets = WindowInsets(0)) {
+                    androidx.compose.material3.HorizontalDivider(
+                        thickness = 0.5.dp,
+                        color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f),
+                    )
+                    NavigationBar(
+                        modifier = Modifier.height(64.dp).testTag("main_bottom_navigation"),
+                        containerColor = MaterialTheme.colorScheme.surface,
+                        windowInsets = WindowInsets(0),
+                    ) {
                         Destination.entries.forEach { destination ->
                             NavigationBarItem(
                                 selected = entry?.destination?.route == destination.route,

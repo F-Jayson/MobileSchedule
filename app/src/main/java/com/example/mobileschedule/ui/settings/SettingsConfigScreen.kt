@@ -105,8 +105,9 @@ fun SettingsConfigScreen(
 
     if (editing?.impactPending == true) AlertDialog(
         onDismissRequest = onDismissImpact,
+        shape = androidx.compose.foundation.shape.RoundedCornerShape(24.dp),
         modifier = Modifier.testTag("impact_dialog"),
-        title = { Text("确认配置影响") },
+        title = { Text("确认配置影响", style = MaterialTheme.typography.titleLarge) },
         text = { Text("若已有课程，首周日期或节次时间变更会立即改变课表日期和详情时间；缩短周数或节数若使课程越界，保存会被阻止，原配置与课程保留。",
             modifier = Modifier.testTag("impact_message")) },
         confirmButton = { TextButton(onClick = onConfirmImpact,
@@ -115,8 +116,9 @@ fun SettingsConfigScreen(
     )
     if (showDiscard) AlertDialog(
         onDismissRequest = { showDiscard = false },
+        shape = androidx.compose.foundation.shape.RoundedCornerShape(24.dp),
         modifier = Modifier.testTag("discard_dialog"),
-        title = { Text("放弃未保存的修改？") },
+        title = { Text("放弃未保存的修改？", style = MaterialTheme.typography.titleLarge) },
         text = { Text("返回后本次输入不会保存，原配置与课程保持不变。") },
         confirmButton = { TextButton(onClick = { showDiscard = false; onBack() },
             modifier = Modifier.testTag("discard_confirm")) { Text("放弃修改") } },

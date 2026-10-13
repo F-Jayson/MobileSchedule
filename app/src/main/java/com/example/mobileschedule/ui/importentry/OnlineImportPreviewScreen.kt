@@ -209,50 +209,92 @@ fun OnlineImportPreviewScreen(
 
 @Composable
 private fun PreviewSummaryContent(summary: ZhengfangImportPreviewSummary, onReadAgain: (() -> Unit)?) {
-                    Text("福建师范大学 · 正方教务", modifier = Modifier.testTag("preview_school"),
-                        style = MaterialTheme.typography.titleMedium)
-                    Text("来源学期：${summary.sourceTermLabel ?: "未确认"}" +
-                        "（${summary.sourceTermId ?: "学校未回显标识"}）",
-                        modifier = Modifier.testTag("preview_source_term"))
-                    Text("本地目标学期 ID：${summary.targetSemesterId}")
-                    Text(completenessText(summary.completeness.status),
-                        modifier = Modifier.testTag("preview_block_reason"),
-                        color = if (summary.completeness.status == CompletenessStatus.VERIFIED_FULL)
-                            MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.error)
-                    Text("读取 ${summary.readCount?.toString() ?: "未知"} · 解析 ${summary.parsedCount} · " +
-                        "有效 ${summary.validCount} · 重复 ${summary.duplicateCount} · " +
-                        "错误 ${summary.errorCount} · 待保存 ${summary.pendingSaveCount} 条课程安排",
-                        modifier = Modifier.testTag("preview_counts"))
-                    Text(replacementText(summary), modifier = Modifier.testTag("preview_replacement"))
-                    HorizontalDivider()
-                    Text("校验与提示", style = MaterialTheme.typography.titleSmall)
-                    Text(if (summary.issues.isEmpty()) "无校验问题" else
-                        summary.issues.joinToString("\n") { issueText(it, summary.parseDiagnostics) },
-                        modifier = Modifier.testTag("preview_issues"),
-                        color = if (summary.issues.any { it.stage != ImportIssueStage.WARNING })
-                            MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant)
-                    HorizontalDivider()
-                    Text("课程安排列表（${summary.arrangements.size}）", style = MaterialTheme.typography.titleSmall)
-                    if (summary.arrangements.isEmpty()) Text("没有可预览的有效课程安排。")
-                    summary.arrangements.forEach { row -> PreviewCourseRow(row) }
-                    if (onReadAgain != null) TextButton(onClick = onReadAgain,
-                        modifier = Modifier.testTag("preview_read_again")) {
-                        Text("返回重新读取")
-                    }
+    androidx.compose.material3.Surface(
+        shape = androidx.compose.foundation.shape.RoundedCornerShape(16.dp),
+        color = MaterialTheme.colorScheme.surfaceContainerLow,
+        border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)),
+        modifier = Modifier.fillMaxWidth(),
+    ) {
+        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Text("福建师范大学 · 正方教务", modifier = Modifier.testTag("preview_school"),
+                fontWeight = androidx.compose.ui.text.font.FontWeight.Bold,
+                style = MaterialTheme.typography.titleMedium)
+            Text("来源学期：${summary.sourceTermLabel ?: "未确认"}" +
+                "（${summary.sourceTermId ?: "学校未回显标识"}）",
+                modifier = Modifier.testTag("preview_source_term"),
+                style = MaterialTheme.typography.bodyMedium)
+            Text("本地目标学期 ID：${summary.targetSemesterId}",
+                style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.outline)
+            Text(completenessText(summary.completeness.status),
+                modifier = Modifier.testTag("preview_block_reason"),
+                fontWeight = androidx.compose.ui.text.font.FontWeight.Medium,
+                color = if (summary.completeness.status == CompletenessStatus.VERIFIED_FULL)
+                    MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error)
+            Text("读取 ${summary.readCount?.toString() ?: "未知"} · 解析 ${summary.parsedCount} · " +
+                "有效 ${summary.validCount} · 重复 ${summary.duplicateCount} · " +
+                "错误 ${summary.errorCount} · 待保存 ${summary.pendingSaveCount} 条课程安排",
+                modifier = Modifier.testTag("preview_counts"),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Text(replacementText(summary), modifier = Modifier.testTag("preview_replacement"),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
+    }
+
+    androidx.compose.material3.Surface(
+        shape = androidx.compose.foundation.shape.RoundedCornerShape(16.dp),
+        color = MaterialTheme.colorScheme.surfaceContainerLow,
+        border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)),
+        modifier = Modifier.fillMaxWidth(),
+    ) {
+        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Text("校验与提示", fontWeight = androidx.compose.ui.text.font.FontWeight.Bold, style = MaterialTheme.typography.titleSmall)
+            Text(if (summary.issues.isEmpty()) "无校验问题" else
+                summary.issues.joinToString("\n") { issueText(it, summary.parseDiagnostics) },
+                modifier = Modifier.testTag("preview_issues"),
+                style = MaterialTheme.typography.bodyMedium,
+                color = if (summary.issues.any { it.stage != ImportIssueStage.WARNING })
+                    MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant)
+        }
+    }
+
+    Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        Text("课程安排列表（${summary.arrangements.size}）",
+            fontWeight = androidx.compose.ui.text.font.FontWeight.Bold,
+            style = MaterialTheme.typography.titleSmall)
+        if (summary.arrangements.isEmpty()) {
+            Text("没有可预览的有效课程安排。", color = MaterialTheme.colorScheme.outline)
+        }
+        summary.arrangements.forEach { row -> PreviewCourseRow(row) }
+    }
+
+    if (onReadAgain != null) {
+        TextButton(onClick = onReadAgain,
+            modifier = Modifier.testTag("preview_read_again")) {
+            Text("返回重新读取", fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold)
+        }
+    }
 }
 
 @Composable
 private fun PreviewCourseRow(row: PreviewArrangement) {
-    Column(Modifier.fillMaxWidth().semantics(mergeDescendants = true) {}
-        .testTag("preview_course_${row.sourceIndex}"),
-        verticalArrangement = Arrangement.spacedBy(2.dp)) {
-        Text(row.name, style = MaterialTheme.typography.titleSmall)
-        Text("星期${"一二三四五六日"[row.dayOfWeek - 1]} · 第${row.startSection}–${row.endSection}节 · ${formatWeeks(row.weeks)}",
-            style = MaterialTheme.typography.bodyMedium)
-        Text("教师：${row.teacher ?: "未提供"} · 地点：${row.location ?: "未提供"}",
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant)
-        HorizontalDivider()
+    androidx.compose.material3.Surface(
+        shape = androidx.compose.foundation.shape.RoundedCornerShape(14.dp),
+        color = MaterialTheme.colorScheme.surfaceContainerLow,
+        border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)),
+        modifier = Modifier.fillMaxWidth().semantics(mergeDescendants = true) {}
+            .testTag("preview_course_${row.sourceIndex}"),
+    ) {
+        Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            Text(row.name, fontWeight = androidx.compose.ui.text.font.FontWeight.Bold, style = MaterialTheme.typography.titleSmall)
+            Text("星期${"一二三四五六日"[row.dayOfWeek - 1]} · 第${row.startSection}–${row.endSection}节 · ${formatWeeks(row.weeks)}",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Text("教师：${row.teacher ?: "未提供"} · 地点：${row.location ?: "未提供"}",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.outline)
+        }
     }
 }
 
