@@ -17,8 +17,8 @@ android {
         applicationId = "com.example.mobileschedule"
         minSdk = 26
         targetSdk = 36
-        versionCode = 4
-        versionName = "1.0.0"
+        versionCode = 5
+        versionName = "1.1.0"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
@@ -48,7 +48,7 @@ android {
             isEnable = true
             reset()
             include("arm64-v8a", "armeabi-v7a", "x86_64")
-            isUniversalApk = false
+            isUniversalApk = true
         }
     }
 }
@@ -62,6 +62,8 @@ configure<com.android.build.gradle.AppExtension> {
             val abi = output.getFilter("ABI")
             if (abi != null) {
                 output.outputFileName = "mobileschedule-v$appVersion-$abi-$buildTypeName.apk"
+            } else {
+                output.outputFileName = "mobileschedule-v$appVersion-universal-$buildTypeName.apk"
             }
         }
     }
