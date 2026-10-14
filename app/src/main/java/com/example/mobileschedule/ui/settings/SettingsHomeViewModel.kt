@@ -7,6 +7,7 @@ import com.example.mobileschedule.data.model.AppUpdateInfo
 import com.example.mobileschedule.data.model.DownloadMirror
 import com.example.mobileschedule.data.model.RepoResult
 import com.example.mobileschedule.data.model.Semester
+import com.example.mobileschedule.data.model.SemesterImportPreview
 import com.example.mobileschedule.data.repository.ScheduleRepository
 import com.example.mobileschedule.data.repository.ScheduleManagementService
 import com.example.mobileschedule.data.preferences.AppPreferencesStore
@@ -116,6 +117,9 @@ class SettingsHomeViewModel @Inject constructor(
         if (mutableAutoUpdate.value) checkUpdate(automatic = true)
     }
 
+    private val mutableImportPreview = MutableStateFlow<SemesterImportPreview?>(null)
+    val importPreview: StateFlow<SemesterImportPreview?> = mutableImportPreview.asStateFlow()
+
     fun clearSemester(semesterId: Long) = manage("清除失败，请重试。") {
         val count = management.clearSemester(semesterId)
         "已清除 $count 条课程安排"
@@ -132,6 +136,46 @@ class SettingsHomeViewModel @Inject constructor(
             it.write(snapshot)
         }
         "课表已导出"
+    }
+
+    fun loadSemesterJsonBackup(uri: Uri) {
+        if (mutableManaging.value) return
+        mutableManaging.value = true
+        mutableActionError.value = null
+        mutableActionMessage.value = null
+        viewModelScope.launch {
+            try {
+                val previewResult = management.importSemesterFromJson(uri)
+                previewResult.onSuccess { preview ->
+                    mutableImportPreview.value = preview
+                }.onFailure { error ->
+                    mutableActionError.value = error.localizedMessage ?: "备份文件解析失败，请检查文件格式。"
+                }
+            } catch (cancel: CancellationException) {
+                throw cancel
+            } catch (e: Exception) {
+                mutableActionError.value = e.localizedMessage ?: "备份文件解析失败，请检查文件格式。"
+            } finally {
+                mutableManaging.value = false
+            }
+        }
+    }
+
+    fun dismissImportDialog() {
+        mutableImportPreview.value = null
+    }
+
+    fun confirmImportJson(preview: SemesterImportPreview, overwriteExisting: Boolean) {
+        mutableImportPreview.value = null
+        manage(if (overwriteExisting) "覆盖学期失败，请重试。" else "导入新学期失败，请重试。") {
+            val result = management.commitImport(preview, overwriteExisting)
+            result.getOrThrow()
+            if (overwriteExisting) {
+                "已恢复并覆盖“${preview.displayName}”（共 ${preview.arrangementCount} 条课程）"
+            } else {
+                "已导入新学期（共 ${preview.arrangementCount} 条课程）"
+            }
+        }
     }
 
     private fun manage(failureMessage: String, action: suspend () -> String) {

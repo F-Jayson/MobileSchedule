@@ -17,7 +17,9 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.compose.foundation.selection.selectable
 import com.example.mobileschedule.data.model.Semester
+import com.example.mobileschedule.data.model.SemesterImportPreview
 
 @Composable
 fun ScheduleManagementRoute(
@@ -31,11 +33,15 @@ fun ScheduleManagementRoute(
     val error by viewModel.actionError.collectAsStateWithLifecycle()
     val message by viewModel.actionMessage.collectAsStateWithLifecycle()
     val busy by viewModel.managing.collectAsStateWithLifecycle()
+    val importPreview by viewModel.importPreview.collectAsStateWithLifecycle()
     var exportSemesterId by rememberSaveable { mutableStateOf<Long?>(null) }
     val exporter = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/json")) { uri ->
         val semesterId = exportSemesterId
         exportSemesterId = null
         if (uri != null && semesterId != null) viewModel.exportSemester(semesterId, uri)
+    }
+    val importer = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+        if (uri != null) viewModel.loadSemesterJsonBackup(uri)
     }
     ScheduleManagementScreen(
         state = state,
@@ -44,6 +50,7 @@ fun ScheduleManagementRoute(
         onEdit = onEdit,
         onActivate = viewModel::activate,
         onImport = onImport,
+        onImportJson = { importer.launch(arrayOf("application/json")) },
         onClear = viewModel::clearSemester,
         onExport = { id ->
             exportSemesterId = id
@@ -53,6 +60,9 @@ fun ScheduleManagementRoute(
         actionError = error,
         actionMessage = message,
         onDelete = viewModel::deleteSemester,
+        importPreview = importPreview,
+        onConfirmImport = viewModel::confirmImportJson,
+        onDismissImport = viewModel::dismissImportDialog,
     )
 }
 
@@ -65,12 +75,16 @@ fun ScheduleManagementScreen(
     onEdit: (Long) -> Unit = {},
     onActivate: (Long) -> Unit = {},
     onImport: () -> Unit = {},
+    onImportJson: () -> Unit = {},
     onClear: (Long) -> Unit = {},
     onExport: (Long) -> Unit = {},
     busy: Boolean = false,
     actionError: String? = null,
     actionMessage: String? = null,
     onDelete: (Long) -> Unit = {},
+    importPreview: SemesterImportPreview? = null,
+    onConfirmImport: (SemesterImportPreview, Boolean) -> Unit = { _, _ -> },
+    onDismissImport: () -> Unit = {},
 ) {
     var clearing by remember { mutableStateOf<Semester?>(null) }
     var deleting by remember { mutableStateOf<Semester?>(null) }
@@ -97,6 +111,114 @@ fun ScheduleManagementScreen(
                 enabled = !busy, modifier = Modifier.testTag("management_confirm_clear")) { Text("清除") } },
             dismissButton = { TextButton(onClick = { clearing = null }, modifier = Modifier.testTag("management_cancel_clear")) { Text("取消") } })
     }
+    importPreview?.let { preview ->
+        var overwrite by remember(preview) { mutableStateOf(preview.existingSemesterId != null) }
+        AlertDialog(
+            onDismissRequest = onDismissImport,
+            modifier = Modifier.testTag("backup_import_dialog"),
+            title = { Text("恢复课表备份", fontWeight = FontWeight.Bold) },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text("学期名称：${preview.displayName}", fontWeight = FontWeight.SemiBold)
+                    Text(
+                        "学期日历：第1周 ${preview.firstWeekMonday} · ${preview.totalWeeks}周 · ${preview.totalSections}节",
+                        style = MaterialTheme.typography.bodySmall,
+                    )
+                    Text(
+                        "课程安排：共 ${preview.arrangementCount} 条课程安排",
+                        style = MaterialTheme.typography.bodySmall,
+                    )
+
+                    if (preview.existingSemesterId != null) {
+                        HorizontalDivider(Modifier.padding(vertical = 4.dp))
+                        Text(
+                            "⚠️ 检测到已存在同名学期“${preview.displayName}”",
+                            color = MaterialTheme.colorScheme.error,
+                            style = MaterialTheme.typography.bodyMedium,
+                            fontWeight = FontWeight.Bold,
+                        )
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .selectable(
+                                    selected = overwrite,
+                                    onClick = { overwrite = true },
+                                )
+                                .padding(vertical = 4.dp)
+                                .testTag("backup_import_overwrite_option"),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            RadioButton(
+                                selected = overwrite,
+                                onClick = { overwrite = true },
+                            )
+                            Column(Modifier.padding(start = 8.dp)) {
+                                Text("覆盖同名学期", fontWeight = FontWeight.Medium)
+                                Text(
+                                    "将清空并替换该学期现有的课程与配置，不可撤销",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.error,
+                                )
+                            }
+                        }
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .selectable(
+                                    selected = !overwrite,
+                                    onClick = { overwrite = false },
+                                )
+                                .padding(vertical = 4.dp)
+                                .testTag("backup_import_new_option"),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            RadioButton(
+                                selected = !overwrite,
+                                onClick = { overwrite = false },
+                            )
+                            Column(Modifier.padding(start = 8.dp)) {
+                                Text("作为新学期导入", fontWeight = FontWeight.Medium)
+                                Text(
+                                    "保留现有同名学期，自动重命名新建学期",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                )
+                            }
+                        }
+                    } else {
+                        Text(
+                            "将把此备份作为全新学期导入到本地课表中。",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                }
+            },
+            confirmButton = {
+                Button(
+                    onClick = { onConfirmImport(preview, overwrite) },
+                    enabled = !busy,
+                    modifier = Modifier.testTag("backup_import_confirm"),
+                    colors = if (preview.existingSemesterId != null && overwrite) {
+                        ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)
+                    } else {
+                        ButtonDefaults.buttonColors()
+                    },
+                ) {
+                    Text(if (preview.existingSemesterId != null && overwrite) "确认覆盖" else "确认导入")
+                }
+            },
+            dismissButton = {
+                TextButton(
+                    onClick = onDismissImport,
+                    enabled = !busy,
+                    modifier = Modifier.testTag("backup_import_dismiss"),
+                ) {
+                    Text("取消")
+                }
+            },
+        )
+    }
     Scaffold(contentWindowInsets = WindowInsets(0), topBar = {
         TopAppBar(title = { Text("课表管理", fontWeight = FontWeight.Bold) }, windowInsets = WindowInsets(0),
             navigationIcon = { TextButton(onClick = onBack) { Text("返回") } })
@@ -104,12 +226,21 @@ fun ScheduleManagementScreen(
         LazyColumn(Modifier.fillMaxSize().padding(padding).testTag("schedule_management_page"),
             contentPadding = PaddingValues(20.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
             item {
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Button(onClick = onImport, enabled = !busy, modifier = Modifier.weight(1f).testTag("settings_import")) {
-                        Text("导入课表")
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Button(onClick = onImport, enabled = !busy, modifier = Modifier.weight(1f).testTag("settings_import")) {
+                            Text("导入课表")
+                        }
+                        OutlinedButton(onClick = onCreate, enabled = !busy, modifier = Modifier.weight(1f).testTag("settings_create")) {
+                            Text("新建学期")
+                        }
                     }
-                    OutlinedButton(onClick = onCreate, enabled = !busy, modifier = Modifier.weight(1f).testTag("settings_create")) {
-                        Text("新建学期")
+                    OutlinedButton(
+                        onClick = onImportJson,
+                        enabled = !busy,
+                        modifier = Modifier.fillMaxWidth().testTag("management_import_backup"),
+                    ) {
+                        Text("导入备份（JSON）")
                     }
                 }
             }

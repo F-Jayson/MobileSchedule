@@ -61,4 +61,11 @@ interface SemesterDao {
     // This leaf row has no dependents; REPLACE is also supported by SQLite on API 26.
     @Query("INSERT OR REPLACE INTO app_settings (id, activeSemesterId) VALUES (0, :semesterId)")
     suspend fun setActiveSemester(semesterId: Long?)
+
+    @Transaction
+    @Query("SELECT * FROM semesters WHERE displayName = :displayName LIMIT 1")
+    suspend fun getSemesterByDisplayName(displayName: String): SemesterWithDetails?
+
+    @Query("SELECT displayName FROM semesters")
+    suspend fun getAllSemesterNames(): List<String>
 }
