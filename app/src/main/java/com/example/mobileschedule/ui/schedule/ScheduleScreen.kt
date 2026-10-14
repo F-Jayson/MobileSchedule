@@ -1,9 +1,11 @@
 package com.example.mobileschedule.ui.schedule
 
 import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.FastOutLinearInEasing
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.LinearOutSlowInEasing
+import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -18,12 +20,17 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.isSystemInDarkTheme
+import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.pager.PagerDefaults
+import androidx.compose.foundation.pager.PagerSnapDistance
+import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -51,14 +58,19 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import kotlinx.coroutines.launch
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
@@ -78,6 +90,9 @@ import androidx.lifecycle.compose.LifecycleEventEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.mobileschedule.R
 import com.example.mobileschedule.data.model.ActiveWeek
+import com.example.mobileschedule.data.model.CourseArrangement
+import com.example.mobileschedule.data.model.SemesterConfig
+import com.example.mobileschedule.data.model.WeekSchedule
 import com.example.mobileschedule.ui.theme.CourseColorPalette
 import com.example.mobileschedule.ui.theme.CourseColorTheme
 import java.time.LocalDate
@@ -247,7 +262,7 @@ private fun ScheduleStatusPage(
     }
 }
 
-/** All seven days share the available width; horizontal drags change weeks, vertical drags scroll sections. */
+/** All seven days share the available width; horizontal drags change weeks synchronously with finger, vertical drags scroll sections. */
 @Composable
 fun WeekScheduleGrid(
     week: ActiveWeek,
@@ -263,194 +278,233 @@ fun WeekScheduleGrid(
     val fontScale = LocalDensity.current.fontScale.coerceIn(1f, 1.8f)
     val rulerWidth = (sectionWidth * fontScale.coerceAtMost(1.15f)).coerceAtMost(46.dp)
     val vertical = rememberScrollState()
-    val swipeThresholdPx = with(LocalDensity.current) { 64.dp.toPx() }
-    val todayIndex = ChronoUnit.DAYS.between(schedule.monday, today).toInt().takeIf { it in 0..6 }
+    val density = LocalDensity.current
+    val swipeThresholdPx = with(density) { 64.dp.toPx() }
+    val coroutineScope = rememberCoroutineScope()
+    val dragOffset = remember { Animatable(0f) }
     var overlappingCourses by remember { mutableStateOf<List<com.example.mobileschedule.data.model.CourseArrangement>?>(null) }
 
-    Column(
-        Modifier.fillMaxSize().testTag("week_grid")
-            .pointerInput(schedule.week, config.totalWeeks, onPreviousWeek, onNextWeek) {
-                var dragDistance = 0f
-                detectHorizontalDragGestures(
-                    onDragStart = { dragDistance = 0f },
-                    onDragEnd = {
-                        if (dragDistance >= swipeThresholdPx && schedule.week > 1) onPreviousWeek()
-                        if (dragDistance <= -swipeThresholdPx && schedule.week < config.totalWeeks) onNextWeek()
-                        dragDistance = 0f
-                    },
-                    onDragCancel = { dragDistance = 0f },
-                    onHorizontalDrag = { change, amount -> dragDistance += amount; change.consume() },
-                )
-            },
-    ) {
-        BoxWithConstraints(Modifier.fillMaxSize()) {
-            val headerHeight = (44.dp * fontScale).coerceAtMost(78.dp)
-            val availableBodyHeight = (maxHeight - headerHeight).coerceAtLeast(0.dp)
-            val rowHeight = (availableBodyHeight / config.totalSections)
-                .coerceIn(52.dp * fontScale, sectionHeight * fontScale)
-            val dayWidth = (maxWidth - rulerWidth) / 7
-            val gridWidth = dayWidth * 7
-            val gridHeight = rowHeight * config.totalSections
-            val compactHeader = dayWidth < 45.dp || fontScale > 1.3f
+    fun getWeekSchedule(weekNum: Int): WeekSchedule {
+        if (weekNum == schedule.week) return schedule
+        val monday = config.firstWeekMonday.plusWeeks((weekNum - 1).toLong())
+        val arrangements = schedule.arrangements.filter { weekNum in it.weeks }
+        return WeekSchedule(
+            semesterId = week.semester.id,
+            week = weekNum,
+            monday = monday,
+            sunday = monday.plusDays(6),
+            arrangements = arrangements,
+        )
+    }
 
-            Column(Modifier.fillMaxSize()) {
-                // Header row containing week title button and seven days
-                Row(
-                    Modifier.fillMaxWidth().height(headerHeight),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    TextButton(
-                        onClick = onWeekTitleClick,
-                        modifier = Modifier.width(rulerWidth).testTag("week_title"),
-                        contentPadding = androidx.compose.foundation.layout.PaddingValues(0.dp),
-                    ) {
-                        AnimatedContent(
-                            targetState = schedule.week,
-                            transitionSpec = {
-                                (fadeIn(animationSpec = tween(220)) + scaleIn(initialScale = 0.85f, animationSpec = tween(220)))
-                                    .togetherWith(fadeOut(animationSpec = tween(180)) + scaleOut(targetScale = 1.15f, animationSpec = tween(180)))
-                            },
-                            label = "week_title_transition",
-                        ) { currentWeek ->
-                            Text(
-                                "${currentWeek}\n周",
-                                textAlign = TextAlign.Center,
-                                fontWeight = FontWeight.Bold,
-                                color = MaterialTheme.colorScheme.primary,
-                                style = MaterialTheme.typography.labelSmall.copy(fontSize = 11.sp, lineHeight = 13.sp),
-                            )
-                        }
-                    }
-                    Row(Modifier.weight(1f).testTag("week_header")) {
-                        AnimatedContent(
-                            targetState = schedule,
-                            transitionSpec = {
-                                val direction = if (targetState.week >= initialState.week) 1 else -1
-                                (slideInHorizontally(
-                                    animationSpec = tween(durationMillis = 280, easing = FastOutSlowInEasing),
-                                    initialOffsetX = { fullWidth -> fullWidth * direction / 4 },
-                                ) + fadeIn(animationSpec = tween(240)))
-                                    .togetherWith(
-                                        slideOutHorizontally(
-                                            animationSpec = tween(durationMillis = 240, easing = FastOutSlowInEasing),
-                                            targetOffsetX = { fullWidth -> -fullWidth * direction / 4 },
-                                        ) + fadeOut(animationSpec = tween(180))
-                                    )
-                            },
-                            label = "week_header_transition",
-                            modifier = Modifier.fillMaxWidth(),
-                        ) { targetSchedule ->
-                            Row(Modifier.fillMaxWidth()) {
-                                weekdays.forEachIndexed { index, day ->
-                                    val date = targetSchedule.monday.plusDays(index.toLong())
-                                    val label = if (compactHeader) day.removePrefix("周") else day
-                                    val dateLabel = if (compactHeader) "${date.dayOfMonth}"
-                                        else "%02d-%02d".format(date.monthValue, date.dayOfMonth)
-                                    val isToday = todayIndex == index
+    BoxWithConstraints(Modifier.fillMaxSize().testTag("week_grid")) {
+        val headerHeight = (44.dp * fontScale).coerceAtMost(78.dp)
+        val availableBodyHeight = (maxHeight - headerHeight).coerceAtLeast(0.dp)
+        val rowHeight = (availableBodyHeight / config.totalSections)
+            .coerceIn(52.dp * fontScale, sectionHeight * fontScale)
+        val dayWidth = (maxWidth - rulerWidth) / 7
+        val gridWidth = dayWidth * 7
+        val gridHeight = rowHeight * config.totalSections
+        val compactHeader = dayWidth < 45.dp || fontScale > 1.3f
+        val gridWidthPx = with(density) { gridWidth.toPx() }
 
-                                    Text(
-                                        "$label\n$dateLabel",
-                                        Modifier.width(dayWidth)
-                                            .background(
-                                                if (isToday) MaterialTheme.colorScheme.primaryContainer else Color.Transparent,
-                                                shape = RoundedCornerShape(8.dp),
-                                            )
-                                            .padding(vertical = 5.dp)
-                                            .testTag("day_${index + 1}"),
-                                        textAlign = TextAlign.Center,
-                                        maxLines = 2,
-                                        fontWeight = if (isToday) FontWeight.Bold else FontWeight.Medium,
-                                        color = if (isToday) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurface,
-                                        style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp, lineHeight = 12.sp),
-                                    )
+        Column(
+            Modifier.fillMaxSize()
+                .pointerInput(schedule.week, config.totalWeeks) {
+                    var totalDrag = 0f
+                    detectHorizontalDragGestures(
+                        onDragStart = {
+                            totalDrag = 0f
+                        },
+                        onDragEnd = {
+                            val threshold = (gridWidthPx * 0.18f).coerceAtLeast(swipeThresholdPx)
+                            coroutineScope.launch {
+                                if (totalDrag <= -threshold && schedule.week < config.totalWeeks) {
+                                    dragOffset.animateTo(-gridWidthPx, tween(200, easing = FastOutSlowInEasing))
+                                    onNextWeek()
+                                    dragOffset.snapTo(0f)
+                                } else if (totalDrag >= threshold && schedule.week > 1) {
+                                    dragOffset.animateTo(gridWidthPx, tween(200, easing = FastOutSlowInEasing))
+                                    onPreviousWeek()
+                                    dragOffset.snapTo(0f)
+                                } else {
+                                    dragOffset.animateTo(0f, spring(dampingRatio = 0.85f, stiffness = 500f))
                                 }
                             }
+                        },
+                        onDragCancel = {
+                            coroutineScope.launch {
+                                dragOffset.animateTo(0f, spring(dampingRatio = 0.85f, stiffness = 500f))
+                            }
+                        },
+                        onHorizontalDrag = { change, dragAmount ->
+                            change.consume()
+                            totalDrag += dragAmount
+                            val canGoLeft = schedule.week < config.totalWeeks
+                            val canGoRight = schedule.week > 1
+                            val clamped = when {
+                                totalDrag < 0 && !canGoLeft -> totalDrag * 0.35f
+                                totalDrag > 0 && !canGoRight -> totalDrag * 0.35f
+                                else -> totalDrag.coerceIn(-gridWidthPx, gridWidthPx)
+                            }
+                            coroutineScope.launch {
+                                dragOffset.snapTo(clamped)
+                            }
+                        }
+                    )
+                }
+        ) {
+            // Header row containing week title button and seven days
+            Row(
+                Modifier.fillMaxWidth().height(headerHeight),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                TextButton(
+                    onClick = onWeekTitleClick,
+                    modifier = Modifier.width(rulerWidth).testTag("week_title"),
+                    contentPadding = androidx.compose.foundation.layout.PaddingValues(0.dp),
+                ) {
+                    AnimatedContent(
+                        targetState = schedule.week,
+                        transitionSpec = {
+                            (fadeIn(animationSpec = tween(220)) + scaleIn(initialScale = 0.85f, animationSpec = tween(220)))
+                                .togetherWith(fadeOut(animationSpec = tween(180)) + scaleOut(targetScale = 1.15f, animationSpec = tween(180)))
+                        },
+                        label = "week_title_transition",
+                    ) { currentWeek ->
+                        Text(
+                            "${currentWeek}\n周",
+                            textAlign = TextAlign.Center,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.primary,
+                            style = MaterialTheme.typography.labelSmall.copy(fontSize = 11.sp, lineHeight = 13.sp),
+                        )
+                    }
+                }
+                Box(Modifier.weight(1f).fillMaxHeight().clipToBounds()) {
+                    val offset = dragOffset.value
+                    // 当前周日期
+                    WeekHeaderRow(
+                        schedule = schedule,
+                        today = today,
+                        dayWidth = dayWidth,
+                        compactHeader = compactHeader,
+                        isCurrentPage = true,
+                        modifier = Modifier.fillMaxWidth().fillMaxHeight().graphicsLayer { translationX = offset }
+                            .testTag("week_header"),
+                    )
+                    // 向左拖动时右侧滑入的下一周日期
+                    if (offset < 0f && schedule.week < config.totalWeeks) {
+                        WeekHeaderRow(
+                            schedule = getWeekSchedule(schedule.week + 1),
+                            today = today,
+                            dayWidth = dayWidth,
+                            compactHeader = compactHeader,
+                            isCurrentPage = false,
+                            modifier = Modifier.fillMaxWidth().fillMaxHeight().graphicsLayer { translationX = offset + gridWidthPx },
+                        )
+                    }
+                    // 向右拖动时左侧滑入的上一周日期
+                    if (offset > 0f && schedule.week > 1) {
+                        WeekHeaderRow(
+                            schedule = getWeekSchedule(schedule.week - 1),
+                            today = today,
+                            dayWidth = dayWidth,
+                            compactHeader = compactHeader,
+                            isCurrentPage = false,
+                            modifier = Modifier.fillMaxWidth().fillMaxHeight().graphicsLayer { translationX = offset - gridWidthPx },
+                        )
+                    }
+                }
+            }
+
+            // Grid body
+            Row(
+                Modifier.fillMaxWidth().weight(1f).verticalScroll(vertical).testTag("week_body_scroll"),
+            ) {
+                // Left ruler column
+                Column(Modifier.width(rulerWidth)) {
+                    repeat(config.totalSections) { index ->
+                        val interval = ScheduleDisplayDefaults.forSection(config, index + 1)
+                        Column(
+                            Modifier.height(rowHeight).fillMaxWidth().padding(top = 5.dp),
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                        ) {
+                            Text(
+                                "${index + 1}",
+                                fontWeight = FontWeight.SemiBold,
+                                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.8f),
+                                style = MaterialTheme.typography.labelMedium.copy(fontSize = 11.sp),
+                            )
+                            Text(
+                                interval?.let { "${it.start.format(timeFormat)}\n${it.end.format(timeFormat)}" } ?: "—",
+                                modifier = Modifier.testTag("section_time_${index + 1}"),
+                                textAlign = TextAlign.Center,
+                                color = MaterialTheme.colorScheme.outline,
+                                style = MaterialTheme.typography.labelSmall.copy(fontSize = 9.sp, lineHeight = 11.sp),
+                            )
                         }
                     }
                 }
 
-                // Grid body
-                Row(Modifier.fillMaxWidth().weight(1f).verticalScroll(vertical)) {
-                    // Left ruler column
-                    Column(Modifier.width(rulerWidth)) {
-                        repeat(config.totalSections) { index ->
-                            val interval = ScheduleDisplayDefaults.forSection(config, index + 1)
-                            Column(
-                                Modifier.height(rowHeight).fillMaxWidth().padding(top = 5.dp),
-                                horizontalAlignment = Alignment.CenterHorizontally,
-                            ) {
-                                Text(
-                                    "${index + 1}",
-                                    fontWeight = FontWeight.SemiBold,
-                                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.8f),
-                                    style = MaterialTheme.typography.labelMedium.copy(fontSize = 11.sp),
-                                )
-                                Text(
-                                    interval?.let { "${it.start.format(timeFormat)}\n${it.end.format(timeFormat)}" } ?: "—",
-                                    modifier = Modifier.testTag("section_time_${index + 1}"),
-                                    textAlign = TextAlign.Center,
-                                    color = MaterialTheme.colorScheme.outline,
-                                    style = MaterialTheme.typography.labelSmall.copy(fontSize = 9.sp, lineHeight = 11.sp),
-                                )
-                            }
+                // Main grid area with real-time finger-synchronized drag gestures
+                Box(
+                    Modifier.weight(1f).height(gridHeight).clipToBounds()
+                ) {
+                    val offset = dragOffset.value
+
+                    // 当前周网格及课程
+                    Box(Modifier.fillMaxSize().graphicsLayer { translationX = offset }) {
+                        WeekScheduleContent(
+                            schedule = schedule,
+                            today = today,
+                            config = config,
+                            dayWidth = dayWidth,
+                            rowHeight = rowHeight,
+                            gridWidth = gridWidth,
+                            gridHeight = gridHeight,
+                            displayOptions = displayOptions,
+                            isCurrentPage = true,
+                            onCourseClick = onCourseClick,
+                            onOverlappingClick = { overlappingCourses = it },
+                        )
+                    }
+
+                    // 向左拖动时右侧滑入的下一周网格及课程
+                    if (offset < 0f && schedule.week < config.totalWeeks) {
+                        Box(Modifier.fillMaxSize().graphicsLayer { translationX = offset + gridWidthPx }) {
+                            WeekScheduleContent(
+                                schedule = getWeekSchedule(schedule.week + 1),
+                                today = today,
+                                config = config,
+                                dayWidth = dayWidth,
+                                rowHeight = rowHeight,
+                                gridWidth = gridWidth,
+                                gridHeight = gridHeight,
+                                displayOptions = displayOptions,
+                                isCurrentPage = false,
+                                onCourseClick = onCourseClick,
+                                onOverlappingClick = { overlappingCourses = it },
+                            )
                         }
                     }
 
-                    // Main grid area
-                    Box(Modifier.weight(1f).testTag("week_body_scroll")) {
-                        Box(Modifier.width(gridWidth).height(gridHeight)) {
-                            WeekGridLines(gridWidth, gridHeight, dayWidth, rowHeight, config.totalSections, todayIndex)
-                            AnimatedContent(
-                                targetState = schedule,
-                                transitionSpec = {
-                                    val direction = if (targetState.week >= initialState.week) 1 else -1
-                                    (slideInHorizontally(
-                                        animationSpec = tween(durationMillis = 280, easing = FastOutSlowInEasing),
-                                        initialOffsetX = { fullWidth -> fullWidth * direction / 3 },
-                                    ) + fadeIn(
-                                        animationSpec = tween(durationMillis = 240, easing = LinearOutSlowInEasing),
-                                    )).togetherWith(
-                                        slideOutHorizontally(
-                                            animationSpec = tween(durationMillis = 240, easing = FastOutSlowInEasing),
-                                            targetOffsetX = { fullWidth -> -fullWidth * direction / 3 },
-                                        ) + fadeOut(
-                                            animationSpec = tween(durationMillis = 180, easing = FastOutLinearInEasing),
-                                        )
-                                    )
-                                },
-                                label = "week_cards_transition",
-                                modifier = Modifier.fillMaxSize(),
-                            ) { targetSchedule ->
-                                Box(Modifier.fillMaxSize()) {
-                                    buildWeekGridSlots(targetSchedule.arrangements).forEach { slot ->
-                                        if (slot.arrangements.size == 2 && dayWidth >= 136.dp) {
-                                            slot.arrangements.forEachIndexed { lane, course ->
-                                                WeekGridCard(
-                                                    slot = WeekGridSlot(slot.dayOfWeek, course.startSection, course.endSection, listOf(course)),
-                                                    dayWidth = dayWidth,
-                                                    rowHeight = rowHeight,
-                                                    lane = lane,
-                                                    laneCount = 2,
-                                                    displayOptions = displayOptions,
-                                                    onClick = { onCourseClick(course.id) },
-                                                )
-                                            }
-                                        } else {
-                                            WeekGridCard(
-                                                slot = slot,
-                                                dayWidth = dayWidth,
-                                                rowHeight = rowHeight,
-                                                displayOptions = displayOptions,
-                                                onClick = {
-                                                    val course = slot.arrangements.singleOrNull()
-                                                    if (course != null) onCourseClick(course.id)
-                                                    else overlappingCourses = slot.arrangements
-                                                },
-                                            )
-                                        }
-                                    }
-                                }
-                            }
+                    // 向右拖动时左侧滑入的上一周网格及课程
+                    if (offset > 0f && schedule.week > 1) {
+                        Box(Modifier.fillMaxSize().graphicsLayer { translationX = offset - gridWidthPx }) {
+                            WeekScheduleContent(
+                                schedule = getWeekSchedule(schedule.week - 1),
+                                today = today,
+                                config = config,
+                                dayWidth = dayWidth,
+                                rowHeight = rowHeight,
+                                gridWidth = gridWidth,
+                                gridHeight = gridHeight,
+                                displayOptions = displayOptions,
+                                isCurrentPage = false,
+                                onCourseClick = onCourseClick,
+                                onOverlappingClick = { overlappingCourses = it },
+                            )
                         }
                     }
                 }
@@ -503,6 +557,97 @@ fun WeekScheduleGrid(
 }
 
 @Composable
+private fun WeekHeaderRow(
+    schedule: WeekSchedule,
+    today: LocalDate,
+    dayWidth: Dp,
+    compactHeader: Boolean,
+    isCurrentPage: Boolean,
+    modifier: Modifier = Modifier,
+) {
+    val todayIndex = ChronoUnit.DAYS.between(schedule.monday, today).toInt().takeIf { it in 0..6 }
+    Row(
+        modifier = modifier,
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        weekdays.forEachIndexed { index, day ->
+            val date = schedule.monday.plusDays(index.toLong())
+            val label = if (compactHeader) day.removePrefix("周") else day
+            val dateLabel = if (compactHeader) "${date.dayOfMonth}"
+                else "%02d-%02d".format(date.monthValue, date.dayOfMonth)
+            val isToday = todayIndex == index
+
+            Text(
+                "$label\n$dateLabel",
+                Modifier.width(dayWidth)
+                    .background(
+                        if (isToday) MaterialTheme.colorScheme.primaryContainer else Color.Transparent,
+                        shape = RoundedCornerShape(8.dp),
+                    )
+                    .padding(vertical = 5.dp)
+                    .then(if (isCurrentPage) Modifier.testTag("day_${index + 1}") else Modifier),
+                textAlign = TextAlign.Center,
+                maxLines = 2,
+                fontWeight = if (isToday) FontWeight.Bold else FontWeight.Medium,
+                color = if (isToday) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurface,
+                style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp, lineHeight = 12.sp),
+            )
+        }
+    }
+}
+
+@Composable
+private fun WeekScheduleContent(
+    schedule: WeekSchedule,
+    today: LocalDate,
+    config: SemesterConfig,
+    dayWidth: Dp,
+    rowHeight: Dp,
+    gridWidth: Dp,
+    gridHeight: Dp,
+    displayOptions: ScheduleDisplayOptions,
+    isCurrentPage: Boolean,
+    onCourseClick: (Long) -> Unit,
+    onOverlappingClick: (List<CourseArrangement>) -> Unit,
+) {
+    val todayIndex = ChronoUnit.DAYS.between(schedule.monday, today).toInt().takeIf { it in 0..6 }
+    Box(Modifier.width(gridWidth).height(gridHeight)) {
+        WeekGridLines(gridWidth, gridHeight, dayWidth, rowHeight, config.totalSections, todayIndex)
+        Box(Modifier.fillMaxSize()) {
+            buildWeekGridSlots(schedule.arrangements).forEach { slot ->
+                if (slot.arrangements.size == 2 && dayWidth >= 136.dp) {
+                    slot.arrangements.forEachIndexed { lane, course ->
+                        WeekGridCard(
+                            slot = WeekGridSlot(slot.dayOfWeek, course.startSection, course.endSection, listOf(course)),
+                            dayWidth = dayWidth,
+                            rowHeight = rowHeight,
+                            lane = lane,
+                            laneCount = 2,
+                            displayOptions = displayOptions,
+                            enableTag = isCurrentPage,
+                            onClick = { onCourseClick(course.id) },
+                        )
+                    }
+                } else {
+                    WeekGridCard(
+                        slot = slot,
+                        dayWidth = dayWidth,
+                        rowHeight = rowHeight,
+                        displayOptions = displayOptions,
+                        enableTag = isCurrentPage,
+                        onClick = {
+                            val course = slot.arrangements.singleOrNull()
+                            if (course != null) onCourseClick(course.id)
+                            else onOverlappingClick(slot.arrangements)
+                        },
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
 private fun WeekGridLines(
     gridWidth: Dp, gridHeight: Dp, dayWidth: Dp, rowHeight: Dp,
     sectionCount: Int, todayIndex: Int?,
@@ -533,6 +678,7 @@ private fun WeekGridCard(
     slot: WeekGridSlot, dayWidth: Dp, rowHeight: Dp, onClick: () -> Unit,
     lane: Int = 0, laneCount: Int = 1,
     displayOptions: ScheduleDisplayOptions = ScheduleDisplayOptions(),
+    enableTag: Boolean = true,
 ) {
     val course = slot.arrangements.singleOrNull()
     val isDark = isSystemInDarkTheme()
@@ -564,7 +710,7 @@ private fun WeekGridCard(
             )
             .width(dayWidth / laneCount - 4.dp)
             .height(rowHeight * slot.sectionSpan - 6.dp)
-            .testTag(tag)
+            .then(if (enableTag) Modifier.testTag(tag) else Modifier)
             .clickable(onClick = onClick)
             .semantics(mergeDescendants = true) { contentDescription = description },
         shape = RoundedCornerShape(8.dp),
