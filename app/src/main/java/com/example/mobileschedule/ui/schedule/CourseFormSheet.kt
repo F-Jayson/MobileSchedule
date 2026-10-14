@@ -59,6 +59,7 @@ import com.example.mobileschedule.data.model.CourseArrangement
 import com.example.mobileschedule.data.model.SemesterConfig
 import com.example.mobileschedule.ui.theme.CourseColorStore
 import com.example.mobileschedule.ui.theme.CourseColorTheme
+import com.example.mobileschedule.ui.theme.LocalIsDarkTheme
 import kotlin.math.abs
 
 private val weekdays = listOf("周一", "周二", "周三", "周四", "周五", "周六", "周日")
@@ -426,7 +427,7 @@ fun CourseFormSheet(
                         style = MaterialTheme.typography.labelMedium,
                         fontWeight = FontWeight.SemiBold,
                     )
-                    val isDark = isSystemInDarkTheme()
+                    val isDark = LocalIsDarkTheme.current
                     Row(
                         Modifier
                             .fillMaxWidth()

@@ -12,8 +12,12 @@ internal data class WeekGridSlot(
     val sectionSpan: Int get() = endSection - startSection + 1
 }
 
-internal fun buildWeekGridSlots(arrangements: List<CourseArrangement>): List<WeekGridSlot> =
-    arrangements.groupBy { it.dayOfWeek }.toSortedMap().flatMap { (day, courses) ->
+internal fun buildWeekGridSlots(
+    arrangements: List<CourseArrangement>,
+    showWeekend: Boolean = true,
+): List<WeekGridSlot> {
+    val filtered = if (showWeekend) arrangements else arrangements.filter { it.dayOfWeek in 1..5 }
+    return filtered.groupBy { it.dayOfWeek }.toSortedMap().flatMap { (day, courses) ->
         val slots = mutableListOf<WeekGridSlot>()
         courses.sortedWith(compareBy(CourseArrangement::startSection, CourseArrangement::endSection, CourseArrangement::id))
             .forEach { course ->
@@ -29,3 +33,4 @@ internal fun buildWeekGridSlots(arrangements: List<CourseArrangement>): List<Wee
             }
         slots
     }
+}

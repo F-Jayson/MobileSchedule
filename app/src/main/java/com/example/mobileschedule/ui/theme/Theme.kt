@@ -7,8 +7,11 @@ import androidx.compose.material3.Shapes
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.compositionLocalOf
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
+import com.example.mobileschedule.data.preferences.AppThemeMode
 
 private val LightColors = lightColorScheme(
     primary = Color(0xFF2563EB),
@@ -74,11 +77,27 @@ private val AppShapes = Shapes(
     extraLarge = RoundedCornerShape(24.dp),
 )
 
+val LocalIsDarkTheme = compositionLocalOf { false }
+val LocalThemeMode = compositionLocalOf { AppThemeMode.SYSTEM }
+
 @Composable
-fun MobileScheduleTheme(content: @Composable () -> Unit) {
-    MaterialTheme(
-        colorScheme = if (isSystemInDarkTheme()) DarkColors else LightColors,
-        shapes = AppShapes,
-        content = content,
-    )
+fun MobileScheduleTheme(
+    themeMode: AppThemeMode = AppThemeMode.SYSTEM,
+    content: @Composable () -> Unit,
+) {
+    val darkTheme = when (themeMode) {
+        AppThemeMode.SYSTEM -> isSystemInDarkTheme()
+        AppThemeMode.LIGHT -> false
+        AppThemeMode.DARK -> true
+    }
+    CompositionLocalProvider(
+        LocalIsDarkTheme provides darkTheme,
+        LocalThemeMode provides themeMode,
+    ) {
+        MaterialTheme(
+            colorScheme = if (darkTheme) DarkColors else LightColors,
+            shapes = AppShapes,
+            content = content,
+        )
+    }
 }

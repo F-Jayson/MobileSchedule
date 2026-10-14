@@ -13,8 +13,10 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
@@ -33,22 +35,52 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import com.example.mobileschedule.data.preferences.AppPreferencesStore
+import java.time.DayOfWeek
 
-data class ScheduleDisplayOptions(val showLocation: Boolean = true, val showTeacher: Boolean = true)
+data class ScheduleDisplayOptions(
+    val showLocation: Boolean = true,
+    val showTeacher: Boolean = true,
+    val showWeekend: Boolean = true,
+    val firstDayOfWeek: DayOfWeek = DayOfWeek.MONDAY,
+)
 
 /** Presentation-only choices; imported courses and semester configuration remain in Room. */
 class ScheduleDisplaySettingsStore(context: Context, preferencesName: String = "schedule_display_settings") {
     private val preferences = context.applicationContext.getSharedPreferences(preferencesName, Context.MODE_PRIVATE)
+    private val appPreferences = AppPreferencesStore(context)
 
-    fun read() = ScheduleDisplayOptions(
-        showLocation = preferences.getBoolean("show_location", true),
-        showTeacher = preferences.getBoolean("show_teacher", true),
-    )
+    fun read(): ScheduleDisplayOptions {
+        val showWeekend = if (preferences.contains("show_weekend")) {
+            preferences.getBoolean("show_weekend", true)
+        } else {
+            appPreferences.isShowWeekend()
+        }
+        val firstDay = if (preferences.contains("first_day_of_week")) {
+            val name = preferences.getString("first_day_of_week", DayOfWeek.MONDAY.name) ?: DayOfWeek.MONDAY.name
+            runCatching { DayOfWeek.valueOf(name) }.getOrDefault(DayOfWeek.MONDAY)
+        } else {
+            appPreferences.getFirstDayOfWeek()
+        }
+        return ScheduleDisplayOptions(
+            showLocation = preferences.getBoolean("show_location", true),
+            showTeacher = preferences.getBoolean("show_teacher", true),
+            showWeekend = showWeekend,
+            firstDayOfWeek = firstDay,
+        )
+    }
 
-    fun save(options: ScheduleDisplayOptions): Boolean = preferences.edit()
-        .putBoolean("show_location", options.showLocation)
-        .putBoolean("show_teacher", options.showTeacher)
-        .commit()
+    fun save(options: ScheduleDisplayOptions): Boolean {
+        val ok1 = preferences.edit()
+            .putBoolean("show_location", options.showLocation)
+            .putBoolean("show_teacher", options.showTeacher)
+            .putBoolean("show_weekend", options.showWeekend)
+            .putString("first_day_of_week", options.firstDayOfWeek.name)
+            .commit()
+        val ok2 = appPreferences.saveShowWeekend(options.showWeekend)
+        val ok3 = appPreferences.saveFirstDayOfWeek(options.firstDayOfWeek)
+        return ok1 && ok2 && ok3
+    }
 }
 
 @Composable
@@ -78,6 +110,8 @@ fun ScheduleDisplaySettingsScreen(
     onBack: () -> Unit,
     saveError: Boolean = false,
 ) {
+    var showFirstDayDialog by remember { mutableStateOf(false) }
+
     Scaffold(
         modifier = Modifier.fillMaxSize().testTag("display_settings_page"),
         contentWindowInsets = WindowInsets(0),
@@ -112,13 +146,14 @@ fun ScheduleDisplaySettingsScreen(
                 modifier = Modifier.fillMaxWidth(),
             ) {
                 Text(
-                    "课程名称始终显示。这里仅调整周课表卡片；点开课程仍可查看完整教师和地点。",
+                    "课程名称始终显示。这里仅调整周课表卡片与网格排版；点开课程仍可查看完整教师和地点。",
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.padding(16.dp),
                 )
             }
 
+            // 卡片内容显示控制
             Surface(
                 shape = RoundedCornerShape(18.dp),
                 color = MaterialTheme.colorScheme.surfaceContainerLow,
@@ -164,6 +199,61 @@ fun ScheduleDisplaySettingsScreen(
                 }
             }
 
+            // 网格高级排版控制（显示周末 & 每周起始日）
+            Surface(
+                shape = RoundedCornerShape(18.dp),
+                color = MaterialTheme.colorScheme.surfaceContainerLow,
+                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)),
+                modifier = Modifier.fillMaxWidth(),
+            ) {
+                Column(Modifier.padding(horizontal = 16.dp, vertical = 6.dp)) {
+                    Row(
+                        Modifier
+                            .fillMaxWidth()
+                            .clickable { onOptionsChange(options.copy(showWeekend = !options.showWeekend)) }
+                            .padding(vertical = 12.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Column(Modifier.weight(1f)) {
+                            Text("显示周末", fontWeight = FontWeight.SemiBold, style = MaterialTheme.typography.bodyLarge)
+                            Text(
+                                if (options.showWeekend) "展示完整七天；工作日与周末均匀排列" else "仅展示周一至周五工作日五天（周末有课将提示）",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.outline,
+                            )
+                        }
+                        Switch(
+                            checked = options.showWeekend,
+                            onCheckedChange = { onOptionsChange(options.copy(showWeekend = it)) },
+                            modifier = Modifier.testTag("display_weekend_switch"),
+                        )
+                    }
+
+                    Row(
+                        Modifier
+                            .fillMaxWidth()
+                            .clickable { showFirstDayDialog = true }
+                            .padding(vertical = 12.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Column(Modifier.weight(1f)) {
+                            Text("每周起始日", fontWeight = FontWeight.SemiBold, style = MaterialTheme.typography.bodyLarge)
+                            Text(
+                                if (options.firstDayOfWeek == DayOfWeek.SUNDAY) "周日为第一列（周日~周六）" else "周一为第一列（周一~周日）",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.outline,
+                            )
+                        }
+                        Text(
+                            if (options.firstDayOfWeek == DayOfWeek.SUNDAY) "周日" else "周一",
+                            fontWeight = FontWeight.SemiBold,
+                            color = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.testTag("display_first_day_entry"),
+                        )
+                    }
+                }
+            }
+
             if (saveError) {
                 Surface(
                     shape = RoundedCornerShape(12.dp),
@@ -192,5 +282,62 @@ fun ScheduleDisplaySettingsScreen(
                 )
             }
         }
+    }
+
+    if (showFirstDayDialog) {
+        AlertDialog(
+            onDismissRequest = { showFirstDayDialog = false },
+            title = { Text("选择每周起始日", fontWeight = FontWeight.Bold) },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable {
+                                onOptionsChange(options.copy(firstDayOfWeek = DayOfWeek.MONDAY))
+                                showFirstDayDialog = false
+                            }
+                            .padding(vertical = 8.dp)
+                            .testTag("first_day_radio_monday"),
+                    ) {
+                        RadioButton(
+                            selected = options.firstDayOfWeek == DayOfWeek.MONDAY,
+                            onClick = {
+                                onOptionsChange(options.copy(firstDayOfWeek = DayOfWeek.MONDAY))
+                                showFirstDayDialog = false
+                            },
+                        )
+                        Text("周一为第一天（默认）", modifier = Modifier.padding(start = 8.dp))
+                    }
+
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable {
+                                onOptionsChange(options.copy(firstDayOfWeek = DayOfWeek.SUNDAY))
+                                showFirstDayDialog = false
+                            }
+                            .padding(vertical = 8.dp)
+                            .testTag("first_day_radio_sunday"),
+                    ) {
+                        RadioButton(
+                            selected = options.firstDayOfWeek == DayOfWeek.SUNDAY,
+                            onClick = {
+                                onOptionsChange(options.copy(firstDayOfWeek = DayOfWeek.SUNDAY))
+                                showFirstDayDialog = false
+                            },
+                        )
+                        Text("周日为第一天", modifier = Modifier.padding(start = 8.dp))
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = { showFirstDayDialog = false }) {
+                    Text("取消")
+                }
+            },
+        )
     }
 }

@@ -37,6 +37,7 @@ import com.example.mobileschedule.data.model.WeekPosition
 @Composable
 internal fun ScheduleSemesterHeader(
     state: ScheduleUiState.Ready,
+    showWeekend: Boolean = true,
     onImport: () -> Unit = {},
     onAddCourse: () -> Unit = {},
 ) {
@@ -78,6 +79,22 @@ internal fun ScheduleSemesterHeader(
                             style = MaterialTheme.typography.bodySmall,
                         )
                         is WeekPosition.InSemester -> Unit
+                    }
+                    val hasWeekendCourses = state.week.schedule.arrangements.any { it.dayOfWeek in 6..7 }
+                    if (!showWeekend && hasWeekendCourses) {
+                        Surface(
+                            shape = RoundedCornerShape(8.dp),
+                            color = MaterialTheme.colorScheme.errorContainer,
+                            modifier = Modifier.padding(top = 3.dp).testTag("weekend_course_notice"),
+                        ) {
+                            Text(
+                                "周末有课（已折叠）",
+                                color = MaterialTheme.colorScheme.onErrorContainer,
+                                fontWeight = FontWeight.Medium,
+                                style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp),
+                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
+                            )
+                        }
                     }
                     if (state.week.schedule.arrangements.isEmpty()) {
                         Text(

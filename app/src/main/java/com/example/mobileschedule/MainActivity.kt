@@ -7,7 +7,10 @@ import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.example.mobileschedule.data.preferences.AppPreferencesStore
 import com.example.mobileschedule.ui.navigation.MobileScheduleApp
 import com.example.mobileschedule.ui.theme.MobileScheduleTheme
 import com.example.mobileschedule.ui.widget.ScheduleWidgetUpdater
@@ -20,10 +23,14 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        val preferences = AppPreferencesStore(this)
         handleWidgetIntent(intent)
         enableEdgeToEdge()
         setContent {
-            MobileScheduleTheme {
+            val themeMode by preferences.themeModeFlow.collectAsStateWithLifecycle(
+                initialValue = preferences.getThemeMode(),
+            )
+            MobileScheduleTheme(themeMode = themeMode) {
                 MobileScheduleApp(
                     initialCourseId = targetCourseId,
                     onClearInitialCourseId = { targetCourseId = null },

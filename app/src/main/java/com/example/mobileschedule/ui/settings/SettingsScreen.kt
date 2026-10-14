@@ -1,11 +1,11 @@
 package com.example.mobileschedule.ui.settings
 
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
@@ -15,6 +15,7 @@ import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.mobileschedule.BuildConfig
 import com.example.mobileschedule.data.model.DownloadMirror
+import com.example.mobileschedule.data.preferences.AppThemeMode
 
 @Composable
 fun SettingsRoute(
@@ -28,8 +29,22 @@ fun SettingsRoute(
     val mirror by viewModel.selectedMirror.collectAsStateWithLifecycle()
     val quickImport by viewModel.quickImport.collectAsStateWithLifecycle()
     val autoUpdate by viewModel.autoUpdate.collectAsStateWithLifecycle()
-    SettingsHomeScreen(state, onManageSchedule, onDisplaySettings, { viewModel.checkUpdate() },
-        mirror, onSelectMirror, quickImport, viewModel::setQuickImport, autoUpdate, viewModel::setAutoUpdate, error)
+    val themeMode by viewModel.themeMode.collectAsStateWithLifecycle()
+    SettingsHomeScreen(
+        state = state,
+        onManageSchedule = onManageSchedule,
+        onDisplaySettings = onDisplaySettings,
+        onCheckUpdate = { viewModel.checkUpdate() },
+        selectedMirror = mirror,
+        onSelectMirror = onSelectMirror,
+        quickImport = quickImport,
+        onQuickImportChange = viewModel::setQuickImport,
+        autoUpdate = autoUpdate,
+        onAutoUpdateChange = viewModel::setAutoUpdate,
+        themeMode = themeMode,
+        onThemeModeChange = viewModel::setThemeMode,
+        actionError = error,
+    )
 }
 
 @Composable
@@ -44,8 +59,11 @@ fun SettingsHomeScreen(
     onQuickImportChange: (Boolean) -> Unit = {},
     autoUpdate: Boolean = true,
     onAutoUpdateChange: (Boolean) -> Unit = {},
+    themeMode: AppThemeMode = AppThemeMode.SYSTEM,
+    onThemeModeChange: (AppThemeMode) -> Unit = {},
     actionError: String? = null,
 ) {
+    var showThemeDialog by remember { mutableStateOf(false) }
     val activeName = (state as? SettingsHomeUiState.Ready)?.let { ready ->
         ready.semesters.firstOrNull { it.id == ready.activeId }?.displayName
     }
@@ -55,6 +73,13 @@ fun SettingsHomeScreen(
         item {
             SettingsGroup("课表管理") {
                 SettingsEntry("管理课表", activeName ?: "导入、导出、清除与学期配置", "settings_manage_schedule", onManageSchedule)
+            }
+        }
+        item {
+            SettingsGroup("外观主题") {
+                SettingsEntry("应用主题", themeMode.title, "settings_theme_entry") {
+                    showThemeDialog = true
+                }
             }
         }
         item {
@@ -73,6 +98,60 @@ fun SettingsHomeScreen(
         }
         if (actionError != null) item { Text(actionError, color = MaterialTheme.colorScheme.error) }
     }
+
+    if (showThemeDialog) {
+        ThemeSelectionDialog(
+            currentMode = themeMode,
+            onSelect = {
+                onThemeModeChange(it)
+                showThemeDialog = false
+            },
+            onDismiss = { showThemeDialog = false },
+        )
+    }
+}
+
+@Composable
+private fun ThemeSelectionDialog(
+    currentMode: AppThemeMode,
+    onSelect: (AppThemeMode) -> Unit,
+    onDismiss: () -> Unit,
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("选择应用主题", fontWeight = FontWeight.Bold) },
+        text = {
+            Column(Modifier.fillMaxWidth()) {
+                AppThemeMode.entries.forEach { mode ->
+                    val tag = when (mode) {
+                        AppThemeMode.SYSTEM -> "theme_radio_system"
+                        AppThemeMode.LIGHT -> "theme_radio_light"
+                        AppThemeMode.DARK -> "theme_radio_dark"
+                    }
+                    Row(
+                        Modifier
+                            .fillMaxWidth()
+                            .clickable { onSelect(mode) }
+                            .padding(vertical = 10.dp, horizontal = 4.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        RadioButton(
+                            selected = (currentMode == mode),
+                            onClick = { onSelect(mode) },
+                            modifier = Modifier.testTag(tag),
+                        )
+                        Spacer(Modifier.width(8.dp))
+                        Text(mode.title, style = MaterialTheme.typography.bodyLarge)
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = onDismiss) {
+                Text("取消")
+            }
+        },
+    )
 }
 
 @Composable

@@ -31,6 +31,7 @@ import com.example.mobileschedule.ui.schedule.CourseFormSheet
 import com.example.mobileschedule.ui.schedule.CourseFormState
 import com.example.mobileschedule.ui.theme.CourseColorStore
 import com.example.mobileschedule.ui.theme.CourseColorTheme
+import com.example.mobileschedule.ui.theme.LocalIsDarkTheme
 import java.time.LocalDate
 import java.time.LocalTime
 import java.time.format.DateTimeFormatter
@@ -468,7 +469,7 @@ private fun TodayCourseCard(
     onClick: () -> Unit,
 ) {
     val arrangement = item.arrangement
-    val isDark = isSystemInDarkTheme()
+    val isDark = LocalIsDarkTheme.current
     val paletteSize = CourseColorTheme.PaletteNames.size
     val colorIndex = CourseColorStore.getColorIndex(arrangement.name)
         ?: ((arrangement.name.hashCode() % paletteSize + paletteSize) % paletteSize)

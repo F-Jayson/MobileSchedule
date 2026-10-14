@@ -79,8 +79,17 @@ object ScheduleRules {
         }
     }
 
-    fun weekPosition(config: SemesterConfig, today: LocalDate): WeekPosition {
-        val days = ChronoUnit.DAYS.between(config.firstWeekMonday, today)
+    fun weekPosition(
+        config: SemesterConfig,
+        today: LocalDate,
+        firstDayOfWeek: DayOfWeek = DayOfWeek.MONDAY,
+    ): WeekPosition {
+        val alignedStart = if (firstDayOfWeek == DayOfWeek.SUNDAY) {
+            config.firstWeekMonday.minusDays(1)
+        } else {
+            config.firstWeekMonday
+        }
+        val days = ChronoUnit.DAYS.between(alignedStart, today)
         if (days < 0) return WeekPosition.BeforeSemester
         val week = days / 7 + 1
         return if (week > config.totalWeeks) WeekPosition.AfterSemester else WeekPosition.InSemester(week.toInt())

@@ -11,6 +11,7 @@ import com.example.mobileschedule.data.model.SemesterImportPreview
 import com.example.mobileschedule.data.repository.ScheduleRepository
 import com.example.mobileschedule.data.repository.ScheduleManagementService
 import com.example.mobileschedule.data.preferences.AppPreferencesStore
+import com.example.mobileschedule.data.preferences.AppThemeMode
 import android.net.Uri
 import com.example.mobileschedule.data.updater.AppUpdateChecker
 import com.example.mobileschedule.data.updater.AppUpdateDownloader
@@ -96,6 +97,18 @@ class SettingsHomeViewModel @Inject constructor(
             preferenceWrites.withLock {
                 if (withContext(Dispatchers.IO) { preferences.saveQuickImport(enabled) }) mutableQuickImport.value = enabled
                 else mutableActionError.value = "快速导入设置保存失败，请重试。"
+            }
+        }
+    }
+
+    val themeMode: StateFlow<AppThemeMode> = preferences.themeModeFlow
+
+    fun setThemeMode(mode: AppThemeMode) {
+        viewModelScope.launch {
+            preferenceWrites.withLock {
+                if (!withContext(Dispatchers.IO) { preferences.saveThemeMode(mode) }) {
+                    mutableActionError.value = "外观主题保存失败，请重试。"
+                }
             }
         }
     }

@@ -43,6 +43,7 @@ import androidx.compose.ui.unit.sp
 import com.example.mobileschedule.data.model.CourseArrangement
 import com.example.mobileschedule.data.model.CourseOrigin
 import com.example.mobileschedule.ui.theme.CourseColorTheme
+import com.example.mobileschedule.ui.theme.LocalIsDarkTheme
 import java.time.format.DateTimeFormatter
 
 private val detailTimeFormat = DateTimeFormatter.ofPattern("HH:mm")
@@ -119,7 +120,7 @@ internal fun CourseDetailSheet(
                     is CourseDetailUiState.Ready -> {
                         val detail = state.detail
                         val course = detail.arrangement
-                        val isDark = isSystemInDarkTheme()
+                        val isDark = LocalIsDarkTheme.current
                         val colorPalette = CourseColorTheme.forCourse(course.name, isDark)
 
                         // 头部：课程标题与颜色标识

@@ -97,6 +97,7 @@ import com.example.mobileschedule.data.model.SemesterConfig
 import com.example.mobileschedule.data.model.WeekSchedule
 import com.example.mobileschedule.ui.theme.CourseColorPalette
 import com.example.mobileschedule.ui.theme.CourseColorTheme
+import com.example.mobileschedule.ui.theme.LocalIsDarkTheme
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
 import java.time.temporal.ChronoUnit
@@ -105,6 +106,52 @@ private val timeFormat = DateTimeFormatter.ofPattern("HH:mm")
 private val weekdays = listOf("周一", "周二", "周三", "周四", "周五", "周六", "周日")
 private val sectionWidth = 40.dp
 private val sectionHeight = 72.dp
+
+internal data class DisplayedDay(
+    val dayOfWeek: Int,
+    val label: String,
+    val date: LocalDate,
+    val columnIndex: Int,
+)
+
+internal fun calculateDisplayedDays(
+    firstWeekMonday: LocalDate,
+    weekNum: Int,
+    showWeekend: Boolean,
+    firstDayOfWeek: java.time.DayOfWeek,
+): List<DisplayedDay> {
+    val monday = firstWeekMonday.plusWeeks((weekNum - 1).toLong())
+    return if (!showWeekend) {
+        listOf(
+            DisplayedDay(1, "周一", monday, 0),
+            DisplayedDay(2, "周二", monday.plusDays(1), 1),
+            DisplayedDay(3, "周三", monday.plusDays(2), 2),
+            DisplayedDay(4, "周四", monday.plusDays(3), 3),
+            DisplayedDay(5, "周五", monday.plusDays(4), 4),
+        )
+    } else if (firstDayOfWeek == java.time.DayOfWeek.SUNDAY) {
+        val sundayDate = monday.minusDays(1)
+        listOf(
+            DisplayedDay(7, "周日", sundayDate, 0),
+            DisplayedDay(1, "周一", monday, 1),
+            DisplayedDay(2, "周二", monday.plusDays(1), 2),
+            DisplayedDay(3, "周三", monday.plusDays(2), 3),
+            DisplayedDay(4, "周四", monday.plusDays(3), 4),
+            DisplayedDay(5, "周五", monday.plusDays(4), 5),
+            DisplayedDay(6, "周六", monday.plusDays(5), 6),
+        )
+    } else {
+        listOf(
+            DisplayedDay(1, "周一", monday, 0),
+            DisplayedDay(2, "周二", monday.plusDays(1), 1),
+            DisplayedDay(3, "周三", monday.plusDays(2), 2),
+            DisplayedDay(4, "周四", monday.plusDays(3), 3),
+            DisplayedDay(5, "周五", monday.plusDays(4), 4),
+            DisplayedDay(6, "周六", monday.plusDays(5), 5),
+            DisplayedDay(7, "周日", monday.plusDays(6), 6),
+        )
+    }
+}
 
 @Composable
 fun ScheduleRoute(
@@ -218,7 +265,12 @@ fun ScheduleScreen(
         is ScheduleUiState.Ready -> {
             var showWeekPicker by remember { mutableStateOf(false) }
             Column(Modifier.fillMaxSize()) {
-                ScheduleSemesterHeader(state, onImport = onImport, onAddCourse = onAddCourse)
+                ScheduleSemesterHeader(
+                    state = state,
+                    showWeekend = displayOptions.showWeekend,
+                    onImport = onImport,
+                    onAddCourse = onAddCourse,
+                )
                 Box(Modifier.weight(1f)) {
                     WeekScheduleGrid(
                         state.week, state.today, onCourseClick,
@@ -353,11 +405,13 @@ fun WeekScheduleGrid(
         val availableBodyHeight = (maxHeight - headerHeight).coerceAtLeast(0.dp)
         val rowHeight = (availableBodyHeight / config.totalSections)
             .coerceIn(52.dp * fontScale, sectionHeight * fontScale)
-        val dayWidth = (maxWidth - rulerWidth) / 7
-        val gridWidth = dayWidth * 7
+        val dayCount = if (displayOptions.showWeekend) 7 else 5
+        val dayWidth = (maxWidth - rulerWidth) / dayCount
+        val gridWidth = dayWidth * dayCount
         val gridHeight = rowHeight * config.totalSections
         val compactHeader = dayWidth < 45.dp || fontScale > 1.3f
         val gridWidthPx = with(density) { gridWidth.toPx() }
+        val hasWeekendCourses = schedule.arrangements.any { it.dayOfWeek in 6..7 }
 
         Column(
             Modifier.fillMaxSize()
@@ -410,26 +464,49 @@ fun WeekScheduleGrid(
                 Modifier.fillMaxWidth().height(headerHeight),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                TextButton(
-                    onClick = onWeekTitleClick,
-                    modifier = Modifier.width(rulerWidth).testTag("week_title"),
-                    contentPadding = androidx.compose.foundation.layout.PaddingValues(0.dp),
-                ) {
-                    AnimatedContent(
-                        targetState = schedule.week,
-                        transitionSpec = {
-                            (fadeIn(animationSpec = tween(220)) + scaleIn(initialScale = 0.85f, animationSpec = tween(220)))
-                                .togetherWith(fadeOut(animationSpec = tween(180)) + scaleOut(targetScale = 1.15f, animationSpec = tween(180)))
-                        },
-                        label = "week_title_transition",
-                    ) { currentWeek ->
-                        Text(
-                            "${currentWeek}\n周",
-                            textAlign = TextAlign.Center,
-                            fontWeight = FontWeight.Bold,
-                            color = MaterialTheme.colorScheme.primary,
-                            style = MaterialTheme.typography.labelSmall.copy(fontSize = 11.sp, lineHeight = 13.sp),
-                        )
+                Box(modifier = Modifier.width(rulerWidth)) {
+                    TextButton(
+                        onClick = onWeekTitleClick,
+                        modifier = Modifier.fillMaxWidth().testTag("week_title"),
+                        contentPadding = androidx.compose.foundation.layout.PaddingValues(0.dp),
+                    ) {
+                        AnimatedContent(
+                            targetState = schedule.week,
+                            transitionSpec = {
+                                (fadeIn(animationSpec = tween(220)) + scaleIn(initialScale = 0.85f, animationSpec = tween(220)))
+                                    .togetherWith(fadeOut(animationSpec = tween(180)) + scaleOut(targetScale = 1.15f, animationSpec = tween(180)))
+                            },
+                            label = "week_title_transition",
+                        ) { currentWeek ->
+                            Text(
+                                "${currentWeek}\n周",
+                                textAlign = TextAlign.Center,
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.primary,
+                                style = MaterialTheme.typography.labelSmall.copy(fontSize = 11.sp, lineHeight = 13.sp),
+                            )
+                        }
+                    }
+                    if (!displayOptions.showWeekend && hasWeekendCourses) {
+                        Box(
+                            modifier = Modifier
+                                .align(Alignment.TopEnd)
+                                .offset(x = (-2).dp, y = 2.dp)
+                                .background(
+                                    MaterialTheme.colorScheme.error,
+                                    shape = RoundedCornerShape(4.dp),
+                                )
+                                .padding(horizontal = 3.dp, vertical = 1.dp)
+                                .testTag("weekend_course_badge"),
+                        ) {
+                            Text(
+                                "末",
+                                color = MaterialTheme.colorScheme.onError,
+                                fontSize = 9.sp,
+                                fontWeight = FontWeight.Bold,
+                                lineHeight = 10.sp,
+                            )
+                        }
                     }
                 }
                 Box(Modifier.weight(1f).fillMaxHeight().clipToBounds()) {
@@ -437,9 +514,11 @@ fun WeekScheduleGrid(
                     // 当前周日期
                     WeekHeaderRow(
                         schedule = schedule,
+                        firstWeekMonday = config.firstWeekMonday,
                         today = today,
                         dayWidth = dayWidth,
                         compactHeader = compactHeader,
+                        displayOptions = displayOptions,
                         isCurrentPage = true,
                         modifier = Modifier.fillMaxWidth().fillMaxHeight().graphicsLayer { translationX = offset }
                             .testTag("week_header"),
@@ -448,9 +527,11 @@ fun WeekScheduleGrid(
                     if (offset < 0f && schedule.week < config.totalWeeks) {
                         WeekHeaderRow(
                             schedule = getWeekSchedule(schedule.week + 1),
+                            firstWeekMonday = config.firstWeekMonday,
                             today = today,
                             dayWidth = dayWidth,
                             compactHeader = compactHeader,
+                            displayOptions = displayOptions,
                             isCurrentPage = false,
                             modifier = Modifier.fillMaxWidth().fillMaxHeight().graphicsLayer { translationX = offset + gridWidthPx },
                         )
@@ -459,9 +540,11 @@ fun WeekScheduleGrid(
                     if (offset > 0f && schedule.week > 1) {
                         WeekHeaderRow(
                             schedule = getWeekSchedule(schedule.week - 1),
+                            firstWeekMonday = config.firstWeekMonday,
                             today = today,
                             dayWidth = dayWidth,
                             compactHeader = compactHeader,
+                            displayOptions = displayOptions,
                             isCurrentPage = false,
                             modifier = Modifier.fillMaxWidth().fillMaxHeight().graphicsLayer { translationX = offset - gridWidthPx },
                         )
@@ -610,23 +693,31 @@ fun WeekScheduleGrid(
 @Composable
 private fun WeekHeaderRow(
     schedule: WeekSchedule,
+    firstWeekMonday: LocalDate,
     today: LocalDate,
     dayWidth: Dp,
     compactHeader: Boolean,
+    displayOptions: ScheduleDisplayOptions,
     isCurrentPage: Boolean,
     modifier: Modifier = Modifier,
 ) {
-    val todayIndex = ChronoUnit.DAYS.between(schedule.monday, today).toInt().takeIf { it in 0..6 }
+    val displayedDays = remember(schedule.week, firstWeekMonday, displayOptions.showWeekend, displayOptions.firstDayOfWeek) {
+        calculateDisplayedDays(
+            firstWeekMonday = firstWeekMonday,
+            weekNum = schedule.week,
+            showWeekend = displayOptions.showWeekend,
+            firstDayOfWeek = displayOptions.firstDayOfWeek,
+        )
+    }
     Row(
         modifier = modifier,
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        weekdays.forEachIndexed { index, day ->
-            val date = schedule.monday.plusDays(index.toLong())
-            val label = if (compactHeader) day.removePrefix("周") else day
-            val dateLabel = if (compactHeader) "${date.dayOfMonth}"
-                else "%02d-%02d".format(date.monthValue, date.dayOfMonth)
-            val isToday = todayIndex == index
+        displayedDays.forEach { dayItem ->
+            val label = if (compactHeader) dayItem.label.removePrefix("周") else dayItem.label
+            val dateLabel = if (compactHeader) "${dayItem.date.dayOfMonth}"
+                else "%02d-%02d".format(dayItem.date.monthValue, dayItem.date.dayOfMonth)
+            val isToday = dayItem.date == today
 
             Text(
                 "$label\n$dateLabel",
@@ -636,7 +727,7 @@ private fun WeekHeaderRow(
                         shape = RoundedCornerShape(8.dp),
                     )
                     .padding(vertical = 5.dp)
-                    .then(if (isCurrentPage) Modifier.testTag("day_${index + 1}") else Modifier),
+                    .then(if (isCurrentPage) Modifier.testTag("day_${dayItem.dayOfWeek}") else Modifier),
                 textAlign = TextAlign.Center,
                 maxLines = 2,
                 fontWeight = if (isToday) FontWeight.Bold else FontWeight.Medium,
@@ -661,37 +752,52 @@ private fun WeekScheduleContent(
     onCourseClick: (Long) -> Unit,
     onOverlappingClick: (List<CourseArrangement>) -> Unit,
 ) {
-    val todayIndex = ChronoUnit.DAYS.between(schedule.monday, today).toInt().takeIf { it in 0..6 }
+    val displayedDays = remember(schedule.week, config.firstWeekMonday, displayOptions.showWeekend, displayOptions.firstDayOfWeek) {
+        calculateDisplayedDays(
+            firstWeekMonday = config.firstWeekMonday,
+            weekNum = schedule.week,
+            showWeekend = displayOptions.showWeekend,
+            firstDayOfWeek = displayOptions.firstDayOfWeek,
+        )
+    }
+    val todayColumnIndex = displayedDays.firstOrNull { it.date == today }?.columnIndex
+    val columnCount = if (displayOptions.showWeekend) 7 else 5
+
     Box(Modifier.width(gridWidth).height(gridHeight)) {
-        WeekGridLines(gridWidth, gridHeight, dayWidth, rowHeight, config.totalSections, todayIndex)
+        WeekGridLines(gridWidth, gridHeight, dayWidth, rowHeight, config.totalSections, columnCount, todayColumnIndex)
         Box(Modifier.fillMaxSize()) {
-            buildWeekGridSlots(schedule.arrangements).forEach { slot ->
-                if (slot.arrangements.size == 2 && dayWidth >= 136.dp) {
-                    slot.arrangements.forEachIndexed { lane, course ->
+            buildWeekGridSlots(schedule.arrangements, showWeekend = displayOptions.showWeekend).forEach { slot ->
+                val dayItem = displayedDays.firstOrNull { it.dayOfWeek == slot.dayOfWeek }
+                if (dayItem != null) {
+                    if (slot.arrangements.size == 2 && dayWidth >= 136.dp) {
+                        slot.arrangements.forEachIndexed { lane, course ->
+                            WeekGridCard(
+                                slot = WeekGridSlot(slot.dayOfWeek, course.startSection, course.endSection, listOf(course)),
+                                columnIndex = dayItem.columnIndex,
+                                dayWidth = dayWidth,
+                                rowHeight = rowHeight,
+                                lane = lane,
+                                laneCount = 2,
+                                displayOptions = displayOptions,
+                                enableTag = isCurrentPage,
+                                onClick = { onCourseClick(course.id) },
+                            )
+                        }
+                    } else {
                         WeekGridCard(
-                            slot = WeekGridSlot(slot.dayOfWeek, course.startSection, course.endSection, listOf(course)),
+                            slot = slot,
+                            columnIndex = dayItem.columnIndex,
                             dayWidth = dayWidth,
                             rowHeight = rowHeight,
-                            lane = lane,
-                            laneCount = 2,
                             displayOptions = displayOptions,
                             enableTag = isCurrentPage,
-                            onClick = { onCourseClick(course.id) },
+                            onClick = {
+                                val course = slot.arrangements.singleOrNull()
+                                if (course != null) onCourseClick(course.id)
+                                else onOverlappingClick(slot.arrangements)
+                            },
                         )
                     }
-                } else {
-                    WeekGridCard(
-                        slot = slot,
-                        dayWidth = dayWidth,
-                        rowHeight = rowHeight,
-                        displayOptions = displayOptions,
-                        enableTag = isCurrentPage,
-                        onClick = {
-                            val course = slot.arrangements.singleOrNull()
-                            if (course != null) onCourseClick(course.id)
-                            else onOverlappingClick(slot.arrangements)
-                        },
-                    )
                 }
             }
         }
@@ -700,8 +806,13 @@ private fun WeekScheduleContent(
 
 @Composable
 private fun WeekGridLines(
-    gridWidth: Dp, gridHeight: Dp, dayWidth: Dp, rowHeight: Dp,
-    sectionCount: Int, todayIndex: Int?,
+    gridWidth: Dp,
+    gridHeight: Dp,
+    dayWidth: Dp,
+    rowHeight: Dp,
+    sectionCount: Int,
+    columnCount: Int,
+    todayIndex: Int?,
 ) {
     val lineColor = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.45f)
     val todayColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.24f)
@@ -713,7 +824,7 @@ private fun WeekGridLines(
                 size = androidx.compose.ui.geometry.Size(dayWidth.toPx(), size.height),
             )
         }
-        for (day in 0..7) {
+        for (day in 0..columnCount) {
             val x = dayWidth.toPx() * day
             drawLine(lineColor, Offset(x, 0f), Offset(x, size.height), 0.8.dp.toPx())
         }
@@ -726,13 +837,18 @@ private fun WeekGridLines(
 
 @Composable
 private fun WeekGridCard(
-    slot: WeekGridSlot, dayWidth: Dp, rowHeight: Dp, onClick: () -> Unit,
-    lane: Int = 0, laneCount: Int = 1,
+    slot: WeekGridSlot,
+    columnIndex: Int,
+    dayWidth: Dp,
+    rowHeight: Dp,
+    onClick: () -> Unit,
+    lane: Int = 0,
+    laneCount: Int = 1,
     displayOptions: ScheduleDisplayOptions = ScheduleDisplayOptions(),
     enableTag: Boolean = true,
 ) {
     val course = slot.arrangements.singleOrNull()
-    val isDark = isSystemInDarkTheme()
+    val isDark = LocalIsDarkTheme.current
     val palette = if (course != null) {
         CourseColorTheme.forCourse(course.name, isDark)
     } else {
@@ -756,7 +872,7 @@ private fun WeekGridCard(
     Card(
         modifier = Modifier
             .offset(
-                x = dayWidth * (slot.dayOfWeek - 1) + dayWidth / laneCount * lane + 2.dp,
+                x = dayWidth * columnIndex + dayWidth / laneCount * lane + 2.dp,
                 y = rowHeight * (slot.startSection - 1) + 3.dp,
             )
             .width(dayWidth / laneCount - 4.dp)
