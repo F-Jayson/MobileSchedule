@@ -45,7 +45,8 @@ import com.example.mobileschedule.ui.settings.SettingsRoute
 import com.example.mobileschedule.ui.settings.SettingsHomeViewModel
 import com.example.mobileschedule.ui.settings.SettingsUpdateHost
 import com.example.mobileschedule.ui.settings.ScheduleManagementRoute
-
+import com.example.mobileschedule.ui.about.AboutRoute
+import com.example.mobileschedule.ui.about.LicensesRoute
 import com.example.mobileschedule.ui.today.TodayRoute
 
 private enum class Destination(
@@ -145,7 +146,19 @@ fun MobileScheduleApp(
             composable(Destination.SETTINGS.route) {
                 SettingsRoute(onManageSchedule = { navController.navigate("settings/schedule-management") },
                     onDisplaySettings = { navController.navigate("schedule/display-settings") },
+                    onAbout = { navController.navigate("settings/about") },
                     onSelectMirror = { showMirror = true }, viewModel = settingsViewModel)
+            }
+            composable("settings/about") {
+                AboutRoute(
+                    onBack = { navController.popBackStack() },
+                    onOpenLicenses = { navController.navigate("settings/about/licenses") },
+                )
+            }
+            composable("settings/about/licenses") {
+                LicensesRoute(
+                    onBack = { navController.popBackStack() },
+                )
             }
             composable("settings/schedule-management") {
                 ScheduleManagementRoute(onBack = { navController.popBackStack() },

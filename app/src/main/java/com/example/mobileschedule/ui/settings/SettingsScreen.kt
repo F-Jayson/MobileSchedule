@@ -22,6 +22,7 @@ fun SettingsRoute(
     onManageSchedule: () -> Unit,
     onDisplaySettings: () -> Unit,
     onSelectMirror: () -> Unit,
+    onAbout: () -> Unit = {},
     viewModel: SettingsHomeViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
@@ -43,6 +44,7 @@ fun SettingsRoute(
         onAutoUpdateChange = viewModel::setAutoUpdate,
         themeMode = themeMode,
         onThemeModeChange = viewModel::setThemeMode,
+        onAbout = onAbout,
         actionError = error,
     )
 }
@@ -61,6 +63,7 @@ fun SettingsHomeScreen(
     onAutoUpdateChange: (Boolean) -> Unit = {},
     themeMode: AppThemeMode = AppThemeMode.SYSTEM,
     onThemeModeChange: (AppThemeMode) -> Unit = {},
+    onAbout: () -> Unit = {},
     actionError: String? = null,
 ) {
     var showThemeDialog by remember { mutableStateOf(false) }
@@ -94,6 +97,11 @@ fun SettingsHomeScreen(
                 SettingsEntry("检查新版本", "当前版本 v${BuildConfig.VERSION_NAME}", "settings_check_update", onCheckUpdate)
                 SettingsEntry("更新源", selectedMirror.displayName.substringBefore(" ("), "settings_select_mirror", onSelectMirror)
                 SettingsToggle("自动检查更新", "启动时检查新版本，有更新时提醒", autoUpdate, onAutoUpdateChange, "settings_auto_update")
+            }
+        }
+        item {
+            SettingsGroup("关于与支持") {
+                SettingsEntry("关于与帮助", "版本、环境信息、开源许可与隐私说明", "settings_about_entry", onAbout)
             }
         }
         if (actionError != null) item { Text(actionError, color = MaterialTheme.colorScheme.error) }
