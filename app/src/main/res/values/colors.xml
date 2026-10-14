@@ -1,4 +1,21 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <color name="ic_launcher_background">#FFFFFF</color>
+
+    <!-- App Widget Light Colors -->
+    <color name="widget_background">#FFFFFF</color>
+    <color name="widget_card_background">#F8F9FA</color>
+    <color name="widget_card_ongoing_bg">#EFF6FF</color>
+    <color name="widget_card_ongoing_stroke">#3B82F6</color>
+    <color name="widget_text_primary">#0F172A</color>
+    <color name="widget_text_secondary">#475569</color>
+    <color name="widget_text_tertiary">#94A3B8</color>
+    <color name="widget_accent">#2563EB</color>
+    <color name="widget_accent_ongoing">#16A34A</color>
+    <color name="widget_pill_bg">#F1F5F9</color>
+    <color name="widget_badge_ongoing_bg">#DCFCE7</color>
+    <color name="widget_badge_ongoing_text">#15803D</color>
+    <color name="widget_badge_normal_bg">#E2E8F0</color>
+    <color name="widget_badge_normal_text">#475569</color>
+    <color name="widget_divider">#F1F5F9</color>
 </resources>

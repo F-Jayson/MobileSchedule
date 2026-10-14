@@ -142,6 +142,7 @@ class SettingsEditorViewModelTest {
         override fun observeCourseDetail(arrangementId: Long): Flow<RepoResult<CourseDetail?>> = error("unused")
         override fun observeImportStatus(semesterId: Long): Flow<RepoResult<SemesterImportStatus>> = error("unused")
         override fun observeTodaySchedule(today: LocalDate, now: java.time.LocalTime): Flow<RepoResult<com.example.mobileschedule.data.model.TodaySchedule>> = error("unused")
+        override suspend fun loadWidgetSchedule(today: LocalDate, now: java.time.LocalTime): com.example.mobileschedule.data.model.WidgetScheduleData = error("unused")
         override suspend fun weekPosition(semesterId: Long, today: LocalDate): RepoResult<WeekPosition> = error("unused")
         override suspend fun createManualCourse(semesterId: Long, draft: ArrangementDraft): RepoResult<CourseArrangement> = error("unused")
         override suspend fun updateManualCourse(arrangementId: Long, draft: ArrangementDraft): RepoResult<CourseArrangement> = error("unused")

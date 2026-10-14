@@ -199,6 +199,12 @@ class ScheduleViewModelTest {
             now: java.time.LocalTime,
         ): Flow<RepoResult<com.example.mobileschedule.data.model.TodaySchedule>> =
             flowOf(RepoResult.Ok(com.example.mobileschedule.data.model.TodaySchedule.NoActiveSemester))
+
+        override suspend fun loadWidgetSchedule(
+            today: LocalDate,
+            now: java.time.LocalTime,
+        ): com.example.mobileschedule.data.model.WidgetScheduleData =
+            com.example.mobileschedule.data.model.WidgetScheduleData.NoSemester("", "", "")
         override fun observeSemesters(): Flow<RepoResult<List<Semester>>> = flowOf(RepoResult.Ok(emptyList()))
         override fun observeSemesterConfig(semesterId: Long): Flow<RepoResult<SemesterConfig?>> = flowOf(RepoResult.Ok(null))
         override fun observeWeek(semesterId: Long, week: Int): Flow<RepoResult<WeekSchedule>> = error("unused")

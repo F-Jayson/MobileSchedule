@@ -29,9 +29,11 @@ import com.example.mobileschedule.data.model.Semester
 import com.example.mobileschedule.data.model.SemesterConfig
 import com.example.mobileschedule.data.model.SemesterConfigDraft
 import com.example.mobileschedule.data.model.TodaySchedule
+import com.example.mobileschedule.data.model.WidgetScheduleData
 import com.example.mobileschedule.data.model.WeekPosition
 import com.example.mobileschedule.data.model.WeekSchedule
 import com.example.mobileschedule.data.rules.ScheduleRules
+import com.example.mobileschedule.ui.widget.ScheduleWidgetNotifier
 import java.time.LocalDate
 import java.time.LocalTime
 import java.time.Instant
@@ -53,8 +55,11 @@ class OfflineScheduleRepository @Inject constructor(private val database: AppDat
 
     override suspend fun prepareImport(request: ImportRequest): RepoResult<ImportPreview> = imports.prepare(request)
 
-    override suspend fun commitImport(previewId: String, confirmation: ImportConfirmation): RepoResult<ImportReceipt> =
-        imports.commit(previewId, confirmation)
+    override suspend fun commitImport(previewId: String, confirmation: ImportConfirmation): RepoResult<ImportReceipt> {
+        val result = imports.commit(previewId, confirmation)
+        if (result is RepoResult.Ok) ScheduleWidgetNotifier.notifyDataChanged()
+        return result
+    }
 
     override suspend fun discardImport(previewId: String): RepoResult<Unit> = imports.discard(previewId)
 
@@ -143,6 +148,27 @@ class OfflineScheduleRepository @Inject constructor(private val database: AppDat
             }
         }.asReadResult()
 
+    override suspend fun loadWidgetSchedule(
+        today: LocalDate,
+        now: LocalTime,
+    ): WidgetScheduleData = try {
+        val activeId = semesters.getActiveSemesterId()
+        if (activeId == null) {
+            ScheduleRules.widgetSchedule(null, emptyList(), today, now)
+        } else {
+            val semesterDetails = semesters.getSemester(activeId)
+            val courseRows = courses.getSemesterCourses(activeId)
+            ScheduleRules.widgetSchedule(
+                semester = semesterDetails?.toModel(),
+                arrangements = courseRows.map { it.toArrangement() },
+                today = today,
+                now = now,
+            )
+        }
+    } catch (_: Exception) {
+        ScheduleRules.widgetSchedule(null, emptyList(), today, now)
+    }
+
     override suspend fun weekPosition(semesterId: Long, today: LocalDate): RepoResult<WeekPosition> = try {
         val semester = semesters.getSemester(semesterId)?.toModel()
             ?: return RepoResult.Err(DataError(DataErrorCode.SEMESTER_NOT_FOUND))
@@ -157,7 +183,7 @@ class OfflineScheduleRepository @Inject constructor(private val database: AppDat
     override suspend fun createSemester(draft: SemesterConfigDraft): RepoResult<Semester> {
         val issues = ScheduleRules.validateConfig(draft)
         if (issues.isNotEmpty()) return RepoResult.Err(DataError(DataErrorCode.CONFIG_INVALID, issues))
-        return try {
+        val result: RepoResult<Semester> = try {
             database.withTransaction {
                 val semesterId = semesters.insertSemester(SemesterEntity(displayName = draft.displayName.trim()))
                 semesters.insertConfig(draft.toEntity(semesterId, 1))
@@ -169,6 +195,8 @@ class OfflineScheduleRepository @Inject constructor(private val database: AppDat
         } catch (_: Exception) {
             RepoResult.Err(DataError(DataErrorCode.STORAGE_WRITE_FAILED))
         }
+        if (result is RepoResult.Ok) ScheduleWidgetNotifier.notifyDataChanged()
+        return result
     }
 
     override suspend fun saveSemesterConfig(
@@ -176,7 +204,7 @@ class OfflineScheduleRepository @Inject constructor(private val database: AppDat
     ): RepoResult<SemesterConfig> {
         val issues = ScheduleRules.validateConfig(draft)
         if (issues.isNotEmpty()) return RepoResult.Err(DataError(DataErrorCode.CONFIG_INVALID, issues))
-        return try {
+        val result: RepoResult<SemesterConfig> = try {
             database.withTransaction {
                 val current = semesters.getSemester(semesterId)?.toModel()
                     ?: return@withTransaction RepoResult.Err(DataError(DataErrorCode.SEMESTER_NOT_FOUND))
@@ -208,27 +236,33 @@ class OfflineScheduleRepository @Inject constructor(private val database: AppDat
         } catch (_: Exception) {
             RepoResult.Err(DataError(DataErrorCode.STORAGE_WRITE_FAILED))
         }
+        if (result is RepoResult.Ok) ScheduleWidgetNotifier.notifyDataChanged()
+        return result
     }
 
-    override suspend fun setActiveSemester(semesterId: Long): RepoResult<Unit> = try {
-        database.withTransaction {
-            if (semesters.getSemester(semesterId) == null) {
-                RepoResult.Err(DataError(DataErrorCode.SEMESTER_NOT_FOUND))
-            } else {
-                semesters.setActiveSemester(semesterId)
-                RepoResult.Ok(Unit)
+    override suspend fun setActiveSemester(semesterId: Long): RepoResult<Unit> {
+        val result: RepoResult<Unit> = try {
+            database.withTransaction {
+                if (semesters.getSemester(semesterId) == null) {
+                    RepoResult.Err(DataError(DataErrorCode.SEMESTER_NOT_FOUND))
+                } else {
+                    semesters.setActiveSemester(semesterId)
+                    RepoResult.Ok(Unit)
+                }
             }
+        } catch (cancel: CancellationException) {
+            throw cancel
+        } catch (_: Exception) {
+            RepoResult.Err(DataError(DataErrorCode.STORAGE_WRITE_FAILED))
         }
-    } catch (cancel: CancellationException) {
-        throw cancel
-    } catch (_: Exception) {
-        RepoResult.Err(DataError(DataErrorCode.STORAGE_WRITE_FAILED))
+        if (result is RepoResult.Ok) ScheduleWidgetNotifier.notifyDataChanged()
+        return result
     }
 
     override suspend fun createManualCourse(
         semesterId: Long, draft: ArrangementDraft,
     ): RepoResult<CourseArrangement> {
-        return try {
+        val result: RepoResult<CourseArrangement> = try {
             database.withTransaction {
                 val semester = semesters.getSemester(semesterId)?.toModel()
                     ?: return@withTransaction RepoResult.Err(DataError(DataErrorCode.SEMESTER_NOT_FOUND))
@@ -261,12 +295,14 @@ class OfflineScheduleRepository @Inject constructor(private val database: AppDat
         } catch (_: Exception) {
             RepoResult.Err(DataError(DataErrorCode.STORAGE_WRITE_FAILED))
         }
+        if (result is RepoResult.Ok) ScheduleWidgetNotifier.notifyDataChanged()
+        return result
     }
 
     override suspend fun updateManualCourse(
         arrangementId: Long, draft: ArrangementDraft,
     ): RepoResult<CourseArrangement> {
-        return try {
+        val result: RepoResult<CourseArrangement> = try {
             database.withTransaction {
                 val existing = courses.getCourse(arrangementId)
                     ?: return@withTransaction RepoResult.Err(DataError(DataErrorCode.COURSE_NOT_FOUND))
@@ -299,10 +335,12 @@ class OfflineScheduleRepository @Inject constructor(private val database: AppDat
         } catch (_: Exception) {
             RepoResult.Err(DataError(DataErrorCode.STORAGE_WRITE_FAILED))
         }
+        if (result is RepoResult.Ok) ScheduleWidgetNotifier.notifyDataChanged()
+        return result
     }
 
     override suspend fun deleteManualCourse(arrangementId: Long): RepoResult<Unit> {
-        return try {
+        val result: RepoResult<Unit> = try {
             database.withTransaction {
                 val existing = courses.getCourse(arrangementId)
                     ?: return@withTransaction RepoResult.Err(DataError(DataErrorCode.COURSE_NOT_FOUND))
@@ -314,6 +352,8 @@ class OfflineScheduleRepository @Inject constructor(private val database: AppDat
         } catch (_: Exception) {
             RepoResult.Err(DataError(DataErrorCode.STORAGE_WRITE_FAILED))
         }
+        if (result is RepoResult.Ok) ScheduleWidgetNotifier.notifyDataChanged()
+        return result
     }
 
     override suspend fun checkArrangementConflict(

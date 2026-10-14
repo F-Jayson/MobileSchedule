@@ -1,0 +1,37 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="260dp"
+    android:height="130dp"
+    android:viewportWidth="260"
+    android:viewportHeight="130">
+  <!-- Widget background -->
+  <path
+      android:fillColor="#F8F9FA"
+      android:pathData="M16,0 L244,0 A16,16 0 0,1 260,16 L260,114 A16,16 0 0,1 244,130 L16,130 A16,16 0 0,1 0,114 L0,16 A16,16 0 0,1 16,0 Z" />
+  <!-- Header bar -->
+  <path
+      android:fillColor="#2563EB"
+      android:pathData="M16,16 L120,16 A4,4 0 0,1 120,28 L16,28 A4,4 0 0,1 16,16 Z" />
+  <path
+      android:fillColor="#E2E8F0"
+      android:pathData="M130,16 L170,16 A4,4 0 0,1 170,28 L130,28 A4,4 0 0,1 130,16 Z" />
+  <!-- Course Card 1 -->
+  <path
+      android:fillColor="#EFF6FF"
+      android:pathData="M16,40 L244,40 A8,8 0 0,1 244,76 L16,76 A8,8 0 0,1 16,40 Z" />
+  <path
+      android:fillColor="#3B82F6"
+      android:pathData="M26,48 L140,48 A3,3 0 0,1 140,58 L26,58 A3,3 0 0,1 26,48 Z" />
+  <path
+      android:fillColor="#94A3B8"
+      android:pathData="M26,62 L200,62 A3,3 0 0,1 200,70 L26,70 A3,3 0 0,1 26,62 Z" />
+  <!-- Course Card 2 -->
+  <path
+      android:fillColor="#FFFFFF"
+      android:pathData="M16,84 L244,84 A8,8 0 0,1 244,120 L16,120 A8,8 0 0,1 16,84 Z" />
+  <path
+      android:fillColor="#1E293B"
+      android:pathData="M26,92 L130,92 A3,3 0 0,1 130,102 L26,102 A3,3 0 0,1 26,92 Z" />
+  <path
+      android:fillColor="#94A3B8"
+      android:pathData="M26,106 L180,106 A3,3 0 0,1 180,114 L26,114 A3,3 0 0,1 26,106 Z" />
+</vector>

@@ -14,6 +14,7 @@ import com.example.mobileschedule.data.model.Semester
 import com.example.mobileschedule.data.model.SemesterConfig
 import com.example.mobileschedule.data.model.SemesterConfigDraft
 import com.example.mobileschedule.data.model.TodaySchedule
+import com.example.mobileschedule.data.model.WidgetScheduleData
 import com.example.mobileschedule.data.model.WeekPosition
 import com.example.mobileschedule.data.model.WeekSchedule
 import java.time.LocalDate
@@ -33,6 +34,10 @@ interface ScheduleRepository {
         today: LocalDate = LocalDate.now(),
         now: LocalTime = LocalTime.now(),
     ): Flow<RepoResult<TodaySchedule>>
+    suspend fun loadWidgetSchedule(
+        today: LocalDate = LocalDate.now(),
+        now: LocalTime = LocalTime.now(),
+    ): WidgetScheduleData
     suspend fun weekPosition(semesterId: Long, today: LocalDate): RepoResult<WeekPosition>
 
     suspend fun createSemester(draft: SemesterConfigDraft): RepoResult<Semester>

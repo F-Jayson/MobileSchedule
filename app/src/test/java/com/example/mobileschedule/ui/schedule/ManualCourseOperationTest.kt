@@ -253,6 +253,12 @@ class ManualCourseOperationTest {
         ): Flow<RepoResult<TodaySchedule>> =
             flowOf(RepoResult.Ok(TodaySchedule.NoActiveSemester))
 
+        override suspend fun loadWidgetSchedule(
+            today: LocalDate,
+            now: java.time.LocalTime,
+        ): com.example.mobileschedule.data.model.WidgetScheduleData =
+            com.example.mobileschedule.data.model.WidgetScheduleData.NoSemester("", "", "")
+
         override suspend fun weekPosition(semesterId: Long, today: LocalDate): RepoResult<WeekPosition> =
             RepoResult.Ok(WeekPosition.InSemester(1))
 

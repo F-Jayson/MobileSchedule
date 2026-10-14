@@ -14,9 +14,12 @@ import com.example.mobileschedule.data.model.SectionTime
 import com.example.mobileschedule.data.model.Semester
 import com.example.mobileschedule.data.model.TodayCourseItem
 import com.example.mobileschedule.data.model.TodaySchedule
+import com.example.mobileschedule.data.model.WidgetCourseItem
+import com.example.mobileschedule.data.model.WidgetScheduleData
 import java.time.DayOfWeek
 import java.time.LocalDate
 import java.time.LocalTime
+import java.time.format.DateTimeFormatter
 import java.time.temporal.ChronoUnit
 
 /** Single source of calendar and range rules for persistence, importing and the UI. */
@@ -180,6 +183,150 @@ object ScheduleRules {
                     dayOfWeek = dayOfWeek,
                     courses = finalizedItems,
                 )
+            }
+        }
+    }
+
+    /**
+     * Pure calculation of App Widget display state (4x2 widget format).
+     * Filters remaining courses today, or falls back to tomorrow's preview or empty states.
+     */
+    fun widgetSchedule(
+        semester: Semester?,
+        arrangements: List<CourseArrangement>,
+        today: LocalDate = LocalDate.now(),
+        now: LocalTime = LocalTime.now(),
+    ): WidgetScheduleData {
+        val weekdays = listOf("", "周一", "周二", "周三", "周四", "周五", "周六", "周日")
+        val weekdayName = weekdays.getOrElse(today.dayOfWeek.value) { "周一" }
+        val dateText = "${today.monthValue}月${today.dayOfMonth}日 $weekdayName"
+
+        if (semester == null || semester.config == null) {
+            return WidgetScheduleData.NoSemester(
+                dateText = dateText,
+                weekText = "未配置学期",
+                message = "点击进入应用配置学期与课表",
+            )
+        }
+
+        val config = semester.config
+        val position = weekPosition(config, today)
+
+        return when (position) {
+            is WeekPosition.BeforeSemester -> {
+                val days = ChronoUnit.DAYS.between(today, config.firstWeekMonday)
+                WidgetScheduleData.BeforeSemester(
+                    dateText = dateText,
+                    weekText = "尚未开学",
+                    daysUntilStart = maxOf(1L, days),
+                    message = "学期尚未开始 · 距开学还有 ${maxOf(1L, days)} 天",
+                )
+            }
+            is WeekPosition.AfterSemester -> {
+                WidgetScheduleData.AfterSemester(
+                    dateText = dateText,
+                    weekText = "已结课",
+                    message = "本学期已结课，假期愉快！",
+                )
+            }
+            is WeekPosition.InSemester -> {
+                val currentWeek = position.week
+                val dayOfWeek = today.dayOfWeek.value
+                val weekText = "第 ${currentWeek} 周"
+
+                // 1. Calculate today's courses
+                val todayArrangements = arrangements.asSequence()
+                    .filter { it.semesterId == semester.id && currentWeek in it.weeks && it.dayOfWeek == dayOfWeek }
+                    .sortedWith(compareBy(CourseArrangement::startSection, CourseArrangement::endSection, CourseArrangement::id))
+                    .toList()
+
+                val timeFormatter = DateTimeFormatter.ofPattern("HH:mm")
+
+                fun toWidgetItem(arrangement: CourseArrangement, isTomorrow: Boolean): WidgetCourseItem {
+                    val startTime = sectionStartTime(config, arrangement.startSection)
+                    val endTime = sectionEndTime(config, arrangement.endSection)
+                    val isOngoing = if (!isTomorrow && startTime != null && endTime != null) {
+                        !now.isBefore(startTime) && !now.isAfter(endTime)
+                    } else false
+
+                    val timeStr = if (startTime != null && endTime != null) {
+                        "${startTime.format(timeFormatter)} - ${endTime.format(timeFormatter)}"
+                    } else {
+                        "第${arrangement.startSection}-${arrangement.endSection}节"
+                    }
+                    val locationStr = arrangement.location?.takeIf { it.isNotBlank() } ?: "未指定地点"
+
+                    return WidgetCourseItem(
+                        id = arrangement.id,
+                        title = arrangement.name,
+                        sectionText = "第${arrangement.startSection}-${arrangement.endSection}节",
+                        timeText = timeStr,
+                        location = locationStr,
+                        teacher = arrangement.teacher,
+                        isOngoing = isOngoing,
+                        isTomorrow = isTomorrow,
+                    )
+                }
+
+                // Filter remaining courses today (CURRENT or UPCOMING)
+                val remainingItems = todayArrangements.mapNotNull { arrangement ->
+                    val endTime = sectionEndTime(config, arrangement.endSection)
+                    val isPast = endTime != null && now.isAfter(endTime)
+                    if (isPast) null else toWidgetItem(arrangement, isTomorrow = false)
+                }
+
+                if (remainingItems.isNotEmpty()) {
+                    val hasOngoing = remainingItems.any { it.isOngoing }
+                    val subtitle = if (hasOngoing) "正在上课" else "今日剩余课程"
+                    WidgetScheduleData.TodayCourses(
+                        dateText = dateText,
+                        weekText = weekText,
+                        subtitle = subtitle,
+                        courses = remainingItems,
+                        totalRemainingCount = remainingItems.size,
+                    )
+                } else {
+                    // Today finished or no courses scheduled today -> Check tomorrow
+                    val wasTodayEmpty = todayArrangements.isEmpty()
+                    val statusNotice = if (wasTodayEmpty) "今日全天无课" else "今日课程已全部上完"
+
+                    val tomorrow = today.plusDays(1)
+                    val tomorrowPosition = weekPosition(config, tomorrow)
+
+                    if (tomorrowPosition is WeekPosition.InSemester) {
+                        val tomorrowWeek = tomorrowPosition.week
+                        val tomorrowDay = tomorrow.dayOfWeek.value
+                        val tomorrowArrangements = arrangements.asSequence()
+                            .filter { it.semesterId == semester.id && tomorrowWeek in it.weeks && it.dayOfWeek == tomorrowDay }
+                            .sortedWith(compareBy(CourseArrangement::startSection, CourseArrangement::endSection, CourseArrangement::id))
+                            .map { toWidgetItem(it, isTomorrow = true) }
+                            .toList()
+
+                        if (tomorrowArrangements.isNotEmpty()) {
+                            WidgetScheduleData.TomorrowPreview(
+                                dateText = dateText,
+                                weekText = weekText,
+                                statusNotice = statusNotice,
+                                subtitle = "明日课程预告",
+                                tomorrowCourses = tomorrowArrangements,
+                            )
+                        } else {
+                            WidgetScheduleData.AllCompleted(
+                                dateText = dateText,
+                                weekText = weekText,
+                                message = statusNotice,
+                                hint = "明日亦无课，好好休息吧~",
+                            )
+                        }
+                    } else {
+                        WidgetScheduleData.AllCompleted(
+                            dateText = dateText,
+                            weekText = weekText,
+                            message = statusNotice,
+                            hint = "明日本学期均无课，好好休息吧~",
+                        )
+                    }
+                }
             }
         }
     }

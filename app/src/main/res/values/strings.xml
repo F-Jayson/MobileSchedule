@@ -13,4 +13,6 @@
     <string name="today_title">今日课程</string>
     <string name="today_body">今日页面已建立。每日课程筛选与课程状态将在后续迭代接入。</string>
     <string name="settings_title">设置</string>
+    <string name="widget_name">今日课表</string>
+    <string name="widget_description">展示当前周次、今日待上课程及明日预告</string>
 </resources>

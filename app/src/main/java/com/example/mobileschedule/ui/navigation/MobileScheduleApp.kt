@@ -59,13 +59,27 @@ private enum class Destination(
 }
 
 @Composable
-fun MobileScheduleApp() {
+fun MobileScheduleApp(
+    initialCourseId: Long? = null,
+    onClearInitialCourseId: () -> Unit = {},
+) {
     val navController = rememberNavController()
     val entry by navController.currentBackStackEntryAsState()
     val settingsViewModel: SettingsHomeViewModel = hiltViewModel()
     var showMirror by remember { mutableStateOf(false) }
     val navigationHeight = 48.dp + 16.dp * (LocalDensity.current.fontScale.coerceAtLeast(1f) - 1f)
     LaunchedEffect(settingsViewModel) { settingsViewModel.checkUpdateOnStartup() }
+    LaunchedEffect(initialCourseId) {
+        if (initialCourseId != null && initialCourseId > 0) {
+            if (entry?.destination?.route != Destination.SCHEDULE.route) {
+                navController.navigate(Destination.SCHEDULE.route) {
+                    popUpTo(navController.graph.findStartDestination().id) { saveState = true }
+                    launchSingleTop = true
+                    restoreState = true
+                }
+            }
+        }
+    }
     SettingsUpdateHost(settingsViewModel, showMirror, { showMirror = true }, { showMirror = false })
     Scaffold(
         bottomBar = {
@@ -110,9 +124,13 @@ fun MobileScheduleApp() {
     ) { padding ->
         NavHost(navController, startDestination = Destination.SCHEDULE.route, modifier = Modifier.padding(padding)) {
             composable(Destination.SCHEDULE.route) {
-                ScheduleRoute(onConfigure = { navController.navigate("config/new") },
+                ScheduleRoute(
+                    onConfigure = { navController.navigate("config/new") },
                     onSettings = { navController.navigate(Destination.SETTINGS.route) },
-                    onImport = { navController.navigate("import") })
+                    onImport = { navController.navigate("import") },
+                    initialArrangementId = initialCourseId,
+                    onClearInitialArrangementId = onClearInitialCourseId,
+                )
             }
             composable(Destination.TODAY.route) {
                 TodayRoute(

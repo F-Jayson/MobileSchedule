@@ -111,6 +111,8 @@ fun ScheduleRoute(
     onConfigure: () -> Unit,
     onSettings: () -> Unit,
     onImport: () -> Unit,
+    initialArrangementId: Long? = null,
+    onClearInitialArrangementId: () -> Unit = {},
     viewModel: ScheduleViewModel = hiltViewModel(),
 ) {
     val context = LocalContext.current
@@ -119,6 +121,12 @@ fun ScheduleRoute(
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     val detailState by viewModel.detailState.collectAsStateWithLifecycle()
     val formState by viewModel.formState.collectAsStateWithLifecycle()
+    LaunchedEffect(initialArrangementId) {
+        if (initialArrangementId != null && initialArrangementId > 0) {
+            viewModel.showCourseDetail(initialArrangementId)
+            onClearInitialArrangementId()
+        }
+    }
     LifecycleEventEffect(Lifecycle.Event.ON_RESUME) {
         viewModel.refreshToday()
         displayOptions = displayStore.read()
