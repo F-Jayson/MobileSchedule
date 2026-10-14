@@ -52,6 +52,7 @@ import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.FilledTonalButton
+import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
@@ -90,6 +91,7 @@ import androidx.lifecycle.compose.LifecycleEventEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.mobileschedule.R
 import com.example.mobileschedule.data.model.ActiveWeek
+import com.example.mobileschedule.data.model.ArrangementDraft
 import com.example.mobileschedule.data.model.CourseArrangement
 import com.example.mobileschedule.data.model.SemesterConfig
 import com.example.mobileschedule.data.model.WeekSchedule
@@ -116,6 +118,7 @@ fun ScheduleRoute(
     var displayOptions by remember(displayStore) { mutableStateOf(displayStore.read()) }
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     val detailState by viewModel.detailState.collectAsStateWithLifecycle()
+    val formState by viewModel.formState.collectAsStateWithLifecycle()
     LifecycleEventEffect(Lifecycle.Event.ON_RESUME) {
         viewModel.refreshToday()
         displayOptions = displayStore.read()
@@ -123,6 +126,7 @@ fun ScheduleRoute(
     ScheduleScreen(
         state = state,
         detailState = detailState,
+        formState = formState,
         displayOptions = displayOptions,
         onPreviousWeek = viewModel::previousWeek,
         onNextWeek = viewModel::nextWeek,
@@ -130,6 +134,13 @@ fun ScheduleRoute(
         onReturnToCurrentWeek = viewModel::returnToCurrentWeek,
         onCourseClick = viewModel::showCourseDetail,
         onDismissDetail = viewModel::closeCourseDetail,
+        onAddCourse = viewModel::openCreateCourse,
+        onEditCourse = viewModel::openEditCourse,
+        onCopyCourse = viewModel::openCopyCourse,
+        onDeleteCourse = { id -> viewModel.deleteCourse(id) },
+        onDismissForm = viewModel::closeCourseForm,
+        onSaveCourse = { draft, colorIndex -> viewModel.saveCourse(draft, colorIndex) },
+        onCheckConflict = { draft, excludingId -> viewModel.checkConflict(draft, excludingId) },
         onConfigure = onConfigure,
         onSettings = onSettings,
         onImport = onImport,
@@ -141,6 +152,7 @@ fun ScheduleRoute(
 fun ScheduleScreen(
     state: ScheduleUiState,
     detailState: CourseDetailUiState = CourseDetailUiState.Closed,
+    formState: CourseFormState = CourseFormState.Closed,
     displayOptions: ScheduleDisplayOptions = ScheduleDisplayOptions(),
     onPreviousWeek: () -> Unit = {},
     onNextWeek: () -> Unit = {},
@@ -148,6 +160,13 @@ fun ScheduleScreen(
     onReturnToCurrentWeek: () -> Unit = {},
     onCourseClick: (Long) -> Unit = {},
     onDismissDetail: () -> Unit = {},
+    onAddCourse: () -> Unit = {},
+    onEditCourse: (CourseArrangement) -> Unit = {},
+    onCopyCourse: (CourseArrangement) -> Unit = {},
+    onDeleteCourse: (Long) -> Unit = {},
+    onDismissForm: () -> Unit = {},
+    onSaveCourse: (ArrangementDraft, Int?) -> Unit = { _, _ -> },
+    onCheckConflict: suspend (ArrangementDraft, Long?) -> List<CourseArrangement> = { _, _ -> emptyList() },
     onConfigure: () -> Unit = {},
     onSettings: () -> Unit = {},
     onImport: () -> Unit = {},
@@ -191,7 +210,7 @@ fun ScheduleScreen(
         is ScheduleUiState.Ready -> {
             var showWeekPicker by remember { mutableStateOf(false) }
             Column(Modifier.fillMaxSize()) {
-                ScheduleSemesterHeader(state, onImport)
+                ScheduleSemesterHeader(state, onImport = onImport, onAddCourse = onAddCourse)
                 Box(Modifier.weight(1f)) {
                     WeekScheduleGrid(
                         state.week, state.today, onCourseClick,
@@ -199,13 +218,37 @@ fun ScheduleScreen(
                         onWeekTitleClick = { showWeekPicker = true },
                         onPreviousWeek = onPreviousWeek, onNextWeek = onNextWeek,
                     )
+                    FloatingActionButton(
+                        onClick = onAddCourse,
+                        shape = CircleShape,
+                        containerColor = MaterialTheme.colorScheme.primaryContainer,
+                        contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
+                        modifier = Modifier
+                            .align(Alignment.BottomEnd)
+                            .padding(16.dp)
+                            .testTag("schedule_add_course_fab"),
+                    ) {
+                        Text("+", fontSize = 24.sp, fontWeight = FontWeight.Bold)
+                    }
                 }
                 ScheduleWeekControls(state, onPreviousWeek, onNextWeek, onReturnToCurrentWeek)
             }
             if (showWeekPicker) WeekPickerDialog(state, onSelectWeek) { showWeekPicker = false }
         }
     }
-    CourseDetailSheet(detailState, onDismissDetail)
+    CourseDetailSheet(
+        state = detailState,
+        onDismiss = onDismissDetail,
+        onEditCourse = onEditCourse,
+        onDeleteCourse = onDeleteCourse,
+        onCopyCourse = onCopyCourse,
+    )
+    CourseFormSheet(
+        formState = formState,
+        onDismiss = onDismissForm,
+        onSave = onSaveCourse,
+        onCheckConflict = onCheckConflict,
+    )
 }
 
 @Composable

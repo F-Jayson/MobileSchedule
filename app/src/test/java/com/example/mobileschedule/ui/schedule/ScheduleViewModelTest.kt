@@ -200,6 +200,45 @@ class ScheduleViewModelTest {
         override suspend fun createSemester(draft: SemesterConfigDraft): RepoResult<Semester> = error("unused")
         override suspend fun saveSemesterConfig(semesterId: Long, expectedRevision: Long, draft: SemesterConfigDraft): RepoResult<SemesterConfig> = error("unused")
         override suspend fun setActiveSemester(semesterId: Long): RepoResult<Unit> = error("unused")
+        override suspend fun createManualCourse(semesterId: Long, draft: ArrangementDraft): RepoResult<CourseArrangement> {
+            val created = CourseArrangement(
+                id = (arrangements.value.maxOfOrNull { it.id } ?: 0L) + 1L,
+                semesterId = semesterId,
+                name = draft.name,
+                teacher = draft.teacher,
+                location = draft.location,
+                dayOfWeek = draft.dayOfWeek,
+                startSection = draft.startSection,
+                endSection = draft.endSection,
+                weeks = draft.weeks,
+                origin = CourseOrigin.Manual,
+            )
+            arrangements.value = arrangements.value + created
+            return RepoResult.Ok(created)
+        }
+        override suspend fun updateManualCourse(arrangementId: Long, draft: ArrangementDraft): RepoResult<CourseArrangement> {
+            val existing = arrangements.value.firstOrNull { it.id == arrangementId } ?: error("not found")
+            val updated = existing.copy(
+                name = draft.name,
+                teacher = draft.teacher,
+                location = draft.location,
+                dayOfWeek = draft.dayOfWeek,
+                startSection = draft.startSection,
+                endSection = draft.endSection,
+                weeks = draft.weeks,
+            )
+            arrangements.value = arrangements.value.map { if (it.id == arrangementId) updated else it }
+            return RepoResult.Ok(updated)
+        }
+        override suspend fun deleteManualCourse(arrangementId: Long): RepoResult<Unit> {
+            arrangements.value = arrangements.value.filterNot { it.id == arrangementId }
+            return RepoResult.Ok(Unit)
+        }
+        override suspend fun checkArrangementConflict(
+            semesterId: Long, draft: ArrangementDraft, excludingArrangementId: Long?,
+        ): RepoResult<List<CourseArrangement>> = RepoResult.Ok(
+            ScheduleRules.findConflicts(draft, arrangements.value, excludingArrangementId)
+        )
         override suspend fun prepareImport(request: ImportRequest): RepoResult<ImportPreview> = error("unused")
         override suspend fun commitImport(previewId: String, confirmation: ImportConfirmation): RepoResult<ImportReceipt> = error("unused")
         override suspend fun discardImport(previewId: String): RepoResult<Unit> = error("unused")

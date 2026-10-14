@@ -4,6 +4,7 @@ import androidx.room.Dao
 import androidx.room.Insert
 import androidx.room.Query
 import androidx.room.Transaction
+import androidx.room.Update
 import com.example.mobileschedule.data.local.entity.CourseWithWeeks
 import com.example.mobileschedule.data.local.entity.CourseEntity
 import com.example.mobileschedule.data.local.entity.CourseWeekEntity
@@ -16,7 +17,11 @@ interface CourseDao {
     fun observeCourses(): Flow<List<CourseWithWeeks>>
 
     @Insert suspend fun insertCourses(courses: List<CourseEntity>): List<Long>
+    @Insert suspend fun insertCourse(course: CourseEntity): Long
     @Insert suspend fun insertWeeks(weeks: List<CourseWeekEntity>)
+    @Update suspend fun updateCourse(course: CourseEntity): Int
+    @Query("DELETE FROM courses WHERE id = :courseId") suspend fun deleteCourse(courseId: Long): Int
+    @Query("DELETE FROM course_weeks WHERE courseId = :courseId") suspend fun deleteCourseWeeks(courseId: Long): Int
 
     @Transaction
     @Query("SELECT * FROM courses WHERE id = :arrangementId")

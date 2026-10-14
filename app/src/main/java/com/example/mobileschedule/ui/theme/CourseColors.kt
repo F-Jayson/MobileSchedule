@@ -131,10 +131,56 @@ object CourseColorTheme {
         ),
     )
 
-    fun forCourse(courseName: String, isDark: Boolean): CourseColorPalette {
+    val PaletteNames = listOf(
+        "晴空天蓝",
+        "润泽薄荷",
+        "浅雾暖紫",
+        "蜜桃珊瑚",
+        "翠微松石",
+        "樱花柔粉",
+        "琥珀微芒",
+        "远山灰青",
+    )
+
+    fun palette(index: Int, isDark: Boolean): CourseColorPalette {
         val palettes = if (isDark) DarkCoursePalettes else LightCoursePalettes
-        val hash = abs(courseName.hashCode())
-        val index = hash % palettes.size
-        return palettes[index]
+        return palettes[index.coerceIn(0, palettes.lastIndex)]
+    }
+
+    fun forCourse(courseName: String, isDark: Boolean, colorIndex: Int? = null): CourseColorPalette {
+        val palettes = if (isDark) DarkCoursePalettes else LightCoursePalettes
+        val chosenIndex = colorIndex ?: CourseColorStore.getColorIndex(courseName) ?: (abs(courseName.hashCode()) % palettes.size)
+        return palettes[chosenIndex % palettes.size]
+    }
+}
+
+object CourseColorStore {
+    private var preferences: android.content.SharedPreferences? = null
+    private val memory = java.util.concurrent.ConcurrentHashMap<String, Int>()
+
+    fun init(context: android.content.Context) {
+        if (preferences == null) {
+            preferences = context.applicationContext.getSharedPreferences("course_color_prefs", android.content.Context.MODE_PRIVATE)
+        }
+    }
+
+    fun getColorIndex(courseName: String): Int? {
+        memory[courseName]?.let { return it }
+        val prefs = preferences ?: return null
+        val key = "course_color_$courseName"
+        if (prefs.contains(key)) {
+            val idx = prefs.getInt(key, -1)
+            if (idx in 0..7) {
+                memory[courseName] = idx
+                return idx
+            }
+        }
+        return null
+    }
+
+    fun setColorIndex(courseName: String, index: Int) {
+        val bounded = index.coerceIn(0, 7)
+        memory[courseName] = bounded
+        preferences?.edit()?.putInt("course_color_$courseName", bounded)?.apply()
     }
 }

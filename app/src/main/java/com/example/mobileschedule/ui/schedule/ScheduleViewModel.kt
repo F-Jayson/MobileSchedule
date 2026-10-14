@@ -3,11 +3,17 @@ package com.example.mobileschedule.ui.schedule
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.mobileschedule.data.model.ActiveWeek
+import com.example.mobileschedule.data.model.ArrangementDraft
+import com.example.mobileschedule.data.model.CourseArrangement
 import com.example.mobileschedule.data.model.CourseDetail
 import com.example.mobileschedule.data.model.CourseOrigin
+import com.example.mobileschedule.data.model.DataError
+import com.example.mobileschedule.data.model.DataErrorCode
 import com.example.mobileschedule.data.model.RepoResult
+import com.example.mobileschedule.data.model.RuleIssueCode
 import com.example.mobileschedule.data.model.WeekPosition
 import com.example.mobileschedule.data.repository.ScheduleRepository
+import com.example.mobileschedule.ui.theme.CourseColorStore
 import dagger.hilt.android.lifecycle.HiltViewModel
 import java.time.LocalDate
 import javax.inject.Inject
@@ -15,6 +21,7 @@ import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.flatMapLatest
@@ -22,6 +29,7 @@ import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.onStart
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.launch
 
 sealed interface ScheduleUiState {
     data object Loading : ScheduleUiState
@@ -52,6 +60,8 @@ class ScheduleViewModel @Inject constructor(private val repository: ScheduleRepo
     private val retryRequests = MutableStateFlow(0)
     private val browsingWeek = MutableStateFlow<BrowsingWeek?>(null)
     private val selectedCourseId = MutableStateFlow<Long?>(null)
+    private val _formState = MutableStateFlow<CourseFormState>(CourseFormState.Closed)
+    val formState: StateFlow<CourseFormState> = _formState.asStateFlow()
 
     val uiState: StateFlow<ScheduleUiState> = retryRequests.flatMapLatest {
         combine(repository.observeActiveSemester(), today) { semester, date -> semester to date }
@@ -147,4 +157,134 @@ class ScheduleViewModel @Inject constructor(private val repository: ScheduleRepo
 
     fun showCourseDetail(id: Long) { selectedCourseId.value = id }
     fun closeCourseDetail() { selectedCourseId.value = null }
+
+    fun openCreateCourse() {
+        val ready = uiState.value as? ScheduleUiState.Ready ?: return
+        val config = ready.week.semester.config ?: return
+        val currentWeek = ready.week.schedule.week
+        _formState.value = CourseFormState.Create(
+            semesterId = ready.week.semester.id,
+            config = config,
+            defaultWeek = currentWeek,
+        )
+    }
+
+    fun openEditCourse(arrangement: CourseArrangement) {
+        val ready = uiState.value as? ScheduleUiState.Ready ?: return
+        val config = ready.week.semester.config ?: return
+        closeCourseDetail()
+        _formState.value = CourseFormState.Edit(
+            arrangement = arrangement,
+            config = config,
+        )
+    }
+
+    fun openCopyCourse(arrangement: CourseArrangement) {
+        val ready = uiState.value as? ScheduleUiState.Ready ?: return
+        val config = ready.week.semester.config ?: return
+        closeCourseDetail()
+        _formState.value = CourseFormState.Copy(
+            arrangement = arrangement,
+            config = config,
+        )
+    }
+
+    fun closeCourseForm() {
+        _formState.value = CourseFormState.Closed
+    }
+
+    fun saveCourse(
+        draft: ArrangementDraft,
+        colorIndex: Int?,
+        onSuccess: () -> Unit = {},
+        onError: (String) -> Unit = {},
+    ) {
+        viewModelScope.launch {
+            when (val state = _formState.value) {
+                is CourseFormState.Create -> {
+                    when (val result = repository.createManualCourse(state.semesterId, draft)) {
+                        is RepoResult.Ok -> {
+                            if (colorIndex != null) {
+                                CourseColorStore.setColorIndex(draft.name.trim(), colorIndex)
+                            }
+                            closeCourseForm()
+                            onSuccess()
+                        }
+                        is RepoResult.Err -> onError(formatError(result.error))
+                    }
+                }
+                is CourseFormState.Copy -> {
+                    when (val result = repository.createManualCourse(state.arrangement.semesterId, draft)) {
+                        is RepoResult.Ok -> {
+                            if (colorIndex != null) {
+                                CourseColorStore.setColorIndex(draft.name.trim(), colorIndex)
+                            }
+                            closeCourseForm()
+                            onSuccess()
+                        }
+                        is RepoResult.Err -> onError(formatError(result.error))
+                    }
+                }
+                is CourseFormState.Edit -> {
+                    when (val result = repository.updateManualCourse(state.arrangement.id, draft)) {
+                        is RepoResult.Ok -> {
+                            if (colorIndex != null) {
+                                CourseColorStore.setColorIndex(draft.name.trim(), colorIndex)
+                            }
+                            closeCourseForm()
+                            onSuccess()
+                        }
+                        is RepoResult.Err -> onError(formatError(result.error))
+                    }
+                }
+                CourseFormState.Closed -> Unit
+            }
+        }
+    }
+
+    fun deleteCourse(
+        arrangementId: Long,
+        onSuccess: () -> Unit = {},
+        onError: (String) -> Unit = {},
+    ) {
+        viewModelScope.launch {
+            when (val result = repository.deleteManualCourse(arrangementId)) {
+                is RepoResult.Ok -> {
+                    closeCourseDetail()
+                    onSuccess()
+                }
+                is RepoResult.Err -> onError(formatError(result.error))
+            }
+        }
+    }
+
+    suspend fun checkConflict(draft: ArrangementDraft, excludingId: Long?): List<CourseArrangement> {
+        val ready = uiState.value as? ScheduleUiState.Ready ?: return emptyList()
+        return when (val res = repository.checkArrangementConflict(ready.week.semester.id, draft, excludingId)) {
+            is RepoResult.Ok -> res.value
+            is RepoResult.Err -> emptyList()
+        }
+    }
+
+    private fun formatError(error: DataError): String {
+        return when (error.code) {
+            DataErrorCode.ARRANGEMENT_INVALID -> {
+                error.issues.firstOrNull()?.let { issue ->
+                    when (issue.code) {
+                        RuleIssueCode.ARRANGEMENT_NAME_REQUIRED -> "课程名称不能为空"
+                        RuleIssueCode.DAY_OUT_OF_RANGE -> "请选择有效的上课星期"
+                        RuleIssueCode.SECTION_RANGE_INVALID -> "节次范围不正确，结束节次不可小于起始节次"
+                        RuleIssueCode.WEEKS_REQUIRED -> "请至少选择一周"
+                        RuleIssueCode.WEEK_OUT_OF_RANGE -> "所选周次超出了当前学期范围"
+                        else -> "课程安排校验未通过，请检查输入"
+                    }
+                } ?: "课程安排无效，请检查输入"
+            }
+            DataErrorCode.COURSE_NOT_FOUND -> "课程不存在或已被移除"
+            DataErrorCode.SEMESTER_NOT_FOUND -> "学期不存在"
+            DataErrorCode.CONFIG_REQUIRED -> "学期未配置节次或周次"
+            DataErrorCode.STORAGE_WRITE_FAILED -> "保存失败，请稍后重试"
+            else -> "操作失败（${error.code}）"
+        }
+    }
 }

@@ -2,11 +2,16 @@ package com.example.mobileschedule.data.repository
 
 import androidx.room.withTransaction
 import com.example.mobileschedule.data.local.AppDatabase
+import com.example.mobileschedule.data.local.entity.CourseEntity
+import com.example.mobileschedule.data.local.entity.CourseOriginType
+import com.example.mobileschedule.data.local.entity.CourseWeekEntity
 import com.example.mobileschedule.data.local.entity.SectionTimeEntity
 import com.example.mobileschedule.data.local.entity.SemesterConfigEntity
 import com.example.mobileschedule.data.local.entity.SemesterEntity
 import com.example.mobileschedule.data.local.entity.toArrangement
 import com.example.mobileschedule.data.local.entity.toModel
+import com.example.mobileschedule.data.model.ArrangementDraft
+import com.example.mobileschedule.data.model.CourseArrangement
 import com.example.mobileschedule.data.model.DataError
 import com.example.mobileschedule.data.model.DataErrorCode
 import com.example.mobileschedule.data.model.ImportRequest
@@ -199,6 +204,108 @@ class OfflineScheduleRepository @Inject constructor(private val database: AppDat
         throw cancel
     } catch (_: Exception) {
         RepoResult.Err(DataError(DataErrorCode.STORAGE_WRITE_FAILED))
+    }
+
+    override suspend fun createManualCourse(
+        semesterId: Long, draft: ArrangementDraft,
+    ): RepoResult<CourseArrangement> {
+        return try {
+            database.withTransaction {
+                val semester = semesters.getSemester(semesterId)?.toModel()
+                    ?: return@withTransaction RepoResult.Err(DataError(DataErrorCode.SEMESTER_NOT_FOUND))
+                val config = semester.config
+                    ?: return@withTransaction RepoResult.Err(DataError(DataErrorCode.CONFIG_REQUIRED))
+                val issues = ScheduleRules.validateArrangement(config, draft)
+                if (issues.isNotEmpty()) {
+                    return@withTransaction RepoResult.Err(DataError(DataErrorCode.ARRANGEMENT_INVALID, issues))
+                }
+                val entity = CourseEntity(
+                    name = draft.name.trim(),
+                    teacher = draft.teacher?.trim()?.takeIf(String::isNotEmpty),
+                    location = draft.location?.trim()?.takeIf(String::isNotEmpty),
+                    dayOfWeek = draft.dayOfWeek,
+                    startSection = draft.startSection,
+                    endSection = draft.endSection,
+                    semesterId = semesterId,
+                    originType = CourseOriginType.MANUAL,
+                    importBatchId = null,
+                    sourceEntryId = null,
+                )
+                val courseId = courses.insertCourse(entity)
+                courses.insertWeeks(draft.weeks.map { CourseWeekEntity(courseId, it) })
+                val saved = courses.getCourse(courseId)
+                    ?: error("Course not found after insertion")
+                RepoResult.Ok(saved.toArrangement())
+            }
+        } catch (cancel: CancellationException) {
+            throw cancel
+        } catch (_: Exception) {
+            RepoResult.Err(DataError(DataErrorCode.STORAGE_WRITE_FAILED))
+        }
+    }
+
+    override suspend fun updateManualCourse(
+        arrangementId: Long, draft: ArrangementDraft,
+    ): RepoResult<CourseArrangement> {
+        return try {
+            database.withTransaction {
+                val existing = courses.getCourse(arrangementId)
+                    ?: return@withTransaction RepoResult.Err(DataError(DataErrorCode.COURSE_NOT_FOUND))
+                val semester = semesters.getSemester(existing.course.semesterId)?.toModel()
+                    ?: return@withTransaction RepoResult.Err(DataError(DataErrorCode.SEMESTER_NOT_FOUND))
+                val config = semester.config
+                    ?: return@withTransaction RepoResult.Err(DataError(DataErrorCode.CONFIG_REQUIRED))
+                val issues = ScheduleRules.validateArrangement(config, draft)
+                if (issues.isNotEmpty()) {
+                    return@withTransaction RepoResult.Err(DataError(DataErrorCode.ARRANGEMENT_INVALID, issues))
+                }
+                val updatedEntity = existing.course.copy(
+                    name = draft.name.trim(),
+                    teacher = draft.teacher?.trim()?.takeIf(String::isNotEmpty),
+                    location = draft.location?.trim()?.takeIf(String::isNotEmpty),
+                    dayOfWeek = draft.dayOfWeek,
+                    startSection = draft.startSection,
+                    endSection = draft.endSection,
+                    originType = CourseOriginType.MANUAL,
+                )
+                courses.updateCourse(updatedEntity)
+                courses.deleteCourseWeeks(arrangementId)
+                courses.insertWeeks(draft.weeks.map { CourseWeekEntity(arrangementId, it) })
+                val saved = courses.getCourse(arrangementId)
+                    ?: error("Course not found after update")
+                RepoResult.Ok(saved.toArrangement())
+            }
+        } catch (cancel: CancellationException) {
+            throw cancel
+        } catch (_: Exception) {
+            RepoResult.Err(DataError(DataErrorCode.STORAGE_WRITE_FAILED))
+        }
+    }
+
+    override suspend fun deleteManualCourse(arrangementId: Long): RepoResult<Unit> {
+        return try {
+            database.withTransaction {
+                val existing = courses.getCourse(arrangementId)
+                    ?: return@withTransaction RepoResult.Err(DataError(DataErrorCode.COURSE_NOT_FOUND))
+                courses.deleteCourse(arrangementId)
+                RepoResult.Ok(Unit)
+            }
+        } catch (cancel: CancellationException) {
+            throw cancel
+        } catch (_: Exception) {
+            RepoResult.Err(DataError(DataErrorCode.STORAGE_WRITE_FAILED))
+        }
+    }
+
+    override suspend fun checkArrangementConflict(
+        semesterId: Long, draft: ArrangementDraft, excludingArrangementId: Long?,
+    ): RepoResult<List<CourseArrangement>> = try {
+        val existing = courses.getSemesterCourses(semesterId).map { it.toArrangement() }
+        RepoResult.Ok(ScheduleRules.findConflicts(draft, existing, excludingArrangementId))
+    } catch (cancel: CancellationException) {
+        throw cancel
+    } catch (_: Exception) {
+        RepoResult.Err(DataError(DataErrorCode.STORAGE_READ_FAILED))
     }
 
     private fun SemesterConfigDraft.toEntity(semesterId: Long, revision: Long) =

@@ -38,6 +38,7 @@ import com.example.mobileschedule.data.model.WeekPosition
 internal fun ScheduleSemesterHeader(
     state: ScheduleUiState.Ready,
     onImport: () -> Unit = {},
+    onAddCourse: () -> Unit = {},
 ) {
     CompositionLocalProvider(LocalMinimumInteractiveComponentSize provides 40.dp) {
     Surface(
@@ -87,13 +88,23 @@ internal fun ScheduleSemesterHeader(
                         )
                     }
                 }
-                if (state.week.schedule.arrangements.isEmpty()) FilledTonalButton(
-                    onClick = onImport,
-                    shape = RoundedCornerShape(20.dp),
-                    contentPadding = PaddingValues(horizontal = 12.dp, vertical = 0.dp),
-                    modifier = Modifier.padding(start = 8.dp).testTag("schedule_import"),
-                ) {
-                    Text("导入课表", fontWeight = FontWeight.SemiBold, style = MaterialTheme.typography.labelMedium)
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    FilledTonalButton(
+                        onClick = onAddCourse,
+                        shape = RoundedCornerShape(20.dp),
+                        contentPadding = PaddingValues(horizontal = 10.dp, vertical = 0.dp),
+                        modifier = Modifier.padding(start = 6.dp).testTag("schedule_add_course"),
+                    ) {
+                        Text("+ 添加课程", fontWeight = FontWeight.SemiBold, style = MaterialTheme.typography.labelMedium)
+                    }
+                    if (state.week.schedule.arrangements.isEmpty()) FilledTonalButton(
+                        onClick = onImport,
+                        shape = RoundedCornerShape(20.dp),
+                        contentPadding = PaddingValues(horizontal = 10.dp, vertical = 0.dp),
+                        modifier = Modifier.padding(start = 6.dp).testTag("schedule_import"),
+                    ) {
+                        Text("导入课表", fontWeight = FontWeight.SemiBold, style = MaterialTheme.typography.labelMedium)
+                    }
                 }
             }
         }

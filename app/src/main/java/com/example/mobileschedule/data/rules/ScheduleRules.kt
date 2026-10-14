@@ -58,6 +58,19 @@ object ScheduleRules {
         }
     }
 
+    fun findConflicts(
+        target: ArrangementDraft,
+        existing: List<CourseArrangement>,
+        excludingArrangementId: Long? = null,
+    ): List<CourseArrangement> = existing.filter { arrangement ->
+        if (excludingArrangementId != null && arrangement.id == excludingArrangementId) false
+        else {
+            arrangement.dayOfWeek == target.dayOfWeek &&
+                maxOf(arrangement.startSection, target.startSection) <= minOf(arrangement.endSection, target.endSection) &&
+                arrangement.weeks.intersect(target.weeks).isNotEmpty()
+        }
+    }
+
     fun weekPosition(config: SemesterConfig, today: LocalDate): WeekPosition {
         val days = ChronoUnit.DAYS.between(config.firstWeekMonday, today)
         if (days < 0) return WeekPosition.BeforeSemester

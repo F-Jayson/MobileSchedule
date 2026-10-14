@@ -16,23 +16,31 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.mobileschedule.data.model.CourseArrangement
 import com.example.mobileschedule.data.model.CourseOrigin
 import com.example.mobileschedule.ui.theme.CourseColorTheme
 import java.time.format.DateTimeFormatter
@@ -42,8 +50,15 @@ private val detailWeekdays = listOf("周一", "周二", "周三", "周四", "周
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-internal fun CourseDetailSheet(state: CourseDetailUiState, onDismiss: () -> Unit) {
+internal fun CourseDetailSheet(
+    state: CourseDetailUiState,
+    onDismiss: () -> Unit,
+    onEditCourse: (CourseArrangement) -> Unit = {},
+    onDeleteCourse: (Long) -> Unit = {},
+    onCopyCourse: (CourseArrangement) -> Unit = {},
+) {
     if (state == CourseDetailUiState.Closed) return
+    var showDeleteDialog by remember { mutableStateOf(false) }
     ModalBottomSheet(
         onDismissRequest = onDismiss,
         sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
@@ -200,6 +215,86 @@ internal fun CourseDetailSheet(state: CourseDetailUiState, onDismiss: () -> Unit
                 }
             }
 
+            if (state is CourseDetailUiState.Ready) {
+                val course = state.detail.arrangement
+                when (course.origin) {
+                    CourseOrigin.Manual -> {
+                        Row(
+                            Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 20.dp, vertical = 4.dp),
+                            horizontalArrangement = Arrangement.spacedBy(12.dp),
+                        ) {
+                            FilledTonalButton(
+                                onClick = { onEditCourse(course) },
+                                shape = RoundedCornerShape(16.dp),
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .testTag("detail_edit_course"),
+                            ) {
+                                Text("编辑课程", fontWeight = FontWeight.SemiBold)
+                            }
+                            OutlinedButton(
+                                onClick = { showDeleteDialog = true },
+                                shape = RoundedCornerShape(16.dp),
+                                colors = ButtonDefaults.outlinedButtonColors(
+                                    contentColor = MaterialTheme.colorScheme.error,
+                                ),
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .testTag("detail_delete_course"),
+                            ) {
+                                Text("删除课程", fontWeight = FontWeight.SemiBold)
+                            }
+                        }
+                    }
+                    is CourseOrigin.SchoolImport -> {
+                        FilledTonalButton(
+                            onClick = { onCopyCourse(course) },
+                            shape = RoundedCornerShape(16.dp),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 20.dp, vertical = 4.dp)
+                                .testTag("detail_copy_course"),
+                        ) {
+                            Text("复制为手动课程", fontWeight = FontWeight.SemiBold)
+                        }
+                    }
+                    CourseOrigin.Legacy -> Unit
+                }
+
+                if (showDeleteDialog) {
+                    AlertDialog(
+                        onDismissRequest = { showDeleteDialog = false },
+                        title = { Text("删除课程") },
+                        text = { Text("确定要删除课程“${course.name}”吗？此操作无法撤销。") },
+                        dismissButton = {
+                            TextButton(
+                                onClick = { showDeleteDialog = false },
+                                modifier = Modifier.testTag("delete_course_dialog_cancel"),
+                            ) {
+                                Text("取消")
+                            }
+                        },
+                        confirmButton = {
+                            Button(
+                                onClick = {
+                                    showDeleteDialog = false
+                                    onDeleteCourse(course.id)
+                                },
+                                colors = ButtonDefaults.buttonColors(
+                                    containerColor = MaterialTheme.colorScheme.error,
+                                ),
+                                modifier = Modifier.testTag("delete_course_dialog_confirm"),
+                            ) {
+                                Text("确认删除")
+                            }
+                        },
+                        modifier = Modifier.testTag("delete_course_dialog"),
+                    )
+                }
+            }
+
             FilledTonalButton(
                 onClick = onDismiss,
                 shape = RoundedCornerShape(16.dp),
@@ -208,7 +303,7 @@ internal fun CourseDetailSheet(state: CourseDetailUiState, onDismiss: () -> Unit
                 ),
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 20.dp, vertical = 12.dp)
+                    .padding(horizontal = 20.dp, vertical = 8.dp)
                     .testTag("detail_close"),
             ) {
                 Text("关闭", fontWeight = FontWeight.SemiBold)

@@ -1,5 +1,7 @@
 package com.example.mobileschedule.data.repository
 
+import com.example.mobileschedule.data.model.ArrangementDraft
+import com.example.mobileschedule.data.model.CourseArrangement
 import com.example.mobileschedule.data.model.RepoResult
 import com.example.mobileschedule.data.model.ImportRequest
 import com.example.mobileschedule.data.model.ImportPreview
@@ -32,6 +34,13 @@ interface ScheduleRepository {
         semesterId: Long, expectedRevision: Long, draft: SemesterConfigDraft,
     ): RepoResult<SemesterConfig>
     suspend fun setActiveSemester(semesterId: Long): RepoResult<Unit>
+
+    suspend fun createManualCourse(semesterId: Long, draft: ArrangementDraft): RepoResult<CourseArrangement>
+    suspend fun updateManualCourse(arrangementId: Long, draft: ArrangementDraft): RepoResult<CourseArrangement>
+    suspend fun deleteManualCourse(arrangementId: Long): RepoResult<Unit>
+    suspend fun checkArrangementConflict(
+        semesterId: Long, draft: ArrangementDraft, excludingArrangementId: Long? = null,
+    ): RepoResult<List<CourseArrangement>>
 
     suspend fun prepareImport(request: ImportRequest): RepoResult<ImportPreview>
     suspend fun commitImport(previewId: String, confirmation: ImportConfirmation): RepoResult<ImportReceipt>
