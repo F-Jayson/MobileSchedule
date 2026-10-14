@@ -9,6 +9,11 @@ import com.example.mobileschedule.data.model.SemesterConfig
 import com.example.mobileschedule.data.model.SemesterConfigDraft
 import com.example.mobileschedule.data.model.WeekPosition
 import com.example.mobileschedule.data.model.WeekSchedule
+import com.example.mobileschedule.data.model.CourseStatus
+import com.example.mobileschedule.data.model.SectionTime
+import com.example.mobileschedule.data.model.Semester
+import com.example.mobileschedule.data.model.TodayCourseItem
+import com.example.mobileschedule.data.model.TodaySchedule
 import java.time.DayOfWeek
 import java.time.LocalDate
 import java.time.LocalTime
@@ -91,5 +96,91 @@ object ScheduleRules {
                     CourseArrangement::endSection, CourseArrangement::id))
                 .toList(),
         )
+    }
+
+    val defaultSectionTimes: List<SectionTime> = listOf(
+        "08:20" to "09:05", "09:15" to "10:00",
+        "10:20" to "11:05", "11:15" to "12:00",
+        "14:00" to "14:45", "14:55" to "15:40",
+        "15:50" to "16:35", "16:45" to "17:30",
+        "18:30" to "19:15", "19:25" to "20:10",
+        "20:20" to "21:05", "21:15" to "22:00",
+    ).mapIndexed { index, (start, end) ->
+        SectionTime(index + 1, LocalTime.parse(start), LocalTime.parse(end))
+    }
+
+    fun findSectionTime(config: SemesterConfig, section: Int): SectionTime? =
+        config.sectionTimes.firstOrNull { it.section == section }
+            ?: defaultSectionTimes.getOrNull(section - 1)
+
+    fun sectionStartTime(config: SemesterConfig, startSection: Int): LocalTime? =
+        findSectionTime(config, startSection)?.start
+
+    fun sectionEndTime(config: SemesterConfig, endSection: Int): LocalTime? =
+        findSectionTime(config, endSection)?.end
+
+    fun todaySchedule(
+        semester: Semester,
+        arrangements: List<CourseArrangement>,
+        today: LocalDate = LocalDate.now(),
+        now: LocalTime = LocalTime.now(),
+    ): TodaySchedule {
+        val config = semester.config ?: return TodaySchedule.ConfigRequired(semester)
+        val position = weekPosition(config, today)
+        return when (position) {
+            is WeekPosition.BeforeSemester -> {
+                val days = ChronoUnit.DAYS.between(today, config.firstWeekMonday)
+                TodaySchedule.BeforeSemester(semester, today, maxOf(1L, days))
+            }
+            is WeekPosition.AfterSemester -> {
+                TodaySchedule.AfterSemester(semester, today)
+            }
+            is WeekPosition.InSemester -> {
+                val currentWeek = position.week
+                val dayOfWeek = today.dayOfWeek.value
+                val todayArrangements = arrangements.asSequence()
+                    .filter { it.semesterId == semester.id && currentWeek in it.weeks && it.dayOfWeek == dayOfWeek }
+                    .sortedWith(
+                        compareBy(
+                            CourseArrangement::startSection,
+                            CourseArrangement::endSection,
+                            CourseArrangement::id,
+                        )
+                    )
+                    .toList()
+
+                val rawItems = todayArrangements.map { arrangement ->
+                    val startTime = sectionStartTime(config, arrangement.startSection)
+                    val endTime = sectionEndTime(config, arrangement.endSection)
+                    val status = when {
+                        startTime != null && endTime != null -> {
+                            if (now.isBefore(startTime)) CourseStatus.UPCOMING
+                            else if (!now.isAfter(endTime)) CourseStatus.CURRENT
+                            else CourseStatus.PAST
+                        }
+                        else -> CourseStatus.UPCOMING
+                    }
+                    TodayCourseItem(
+                        arrangement = arrangement,
+                        startTime = startTime,
+                        endTime = endTime,
+                        status = status,
+                    )
+                }
+
+                val nextUpcoming = rawItems.firstOrNull { it.status == CourseStatus.UPCOMING }
+                val finalizedItems = rawItems.map { item ->
+                    if (item == nextUpcoming) item.copy(isNext = true) else item
+                }
+
+                TodaySchedule.Ready(
+                    semester = semester,
+                    currentWeek = currentWeek,
+                    date = today,
+                    dayOfWeek = dayOfWeek,
+                    courses = finalizedItems,
+                )
+            }
+        }
     }
 }

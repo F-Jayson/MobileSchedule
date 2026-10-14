@@ -194,6 +194,11 @@ class ScheduleViewModelTest {
         }
         override fun observeCourseDetail(arrangementId: Long): Flow<RepoResult<CourseDetail?>> = detail
         override fun observeImportStatus(semesterId: Long): Flow<RepoResult<SemesterImportStatus>> = importStatus
+        override fun observeTodaySchedule(
+            today: LocalDate,
+            now: java.time.LocalTime,
+        ): Flow<RepoResult<com.example.mobileschedule.data.model.TodaySchedule>> =
+            flowOf(RepoResult.Ok(com.example.mobileschedule.data.model.TodaySchedule.NoActiveSemester))
         override fun observeSemesters(): Flow<RepoResult<List<Semester>>> = flowOf(RepoResult.Ok(emptyList()))
         override fun observeSemesterConfig(semesterId: Long): Flow<RepoResult<SemesterConfig?>> = flowOf(RepoResult.Ok(null))
         override fun observeWeek(semesterId: Long, week: Int): Flow<RepoResult<WeekSchedule>> = error("unused")

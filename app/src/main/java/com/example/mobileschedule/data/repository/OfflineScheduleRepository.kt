@@ -28,10 +28,12 @@ import com.example.mobileschedule.data.model.RepoResult
 import com.example.mobileschedule.data.model.Semester
 import com.example.mobileschedule.data.model.SemesterConfig
 import com.example.mobileschedule.data.model.SemesterConfigDraft
+import com.example.mobileschedule.data.model.TodaySchedule
 import com.example.mobileschedule.data.model.WeekPosition
 import com.example.mobileschedule.data.model.WeekSchedule
 import com.example.mobileschedule.data.rules.ScheduleRules
 import java.time.LocalDate
+import java.time.LocalTime
 import java.time.Instant
 import javax.inject.Inject
 import kotlinx.coroutines.CancellationException
@@ -122,6 +124,23 @@ class OfflineScheduleRepository @Inject constructor(private val database: AppDat
                             requireNotNull(row.savedCount), requireNotNull(row.removedCount)) },
                         row.currentArrangementCount)
                 }))
+        }.asReadResult()
+
+    @OptIn(ExperimentalCoroutinesApi::class)
+    override fun observeTodaySchedule(
+        today: LocalDate,
+        now: LocalTime,
+    ): Flow<RepoResult<TodaySchedule>> =
+        semesters.observeActiveSemester().flatMapLatest { active ->
+            if (active == null) {
+                flowOf(RepoResult.Ok(TodaySchedule.NoActiveSemester))
+            } else {
+                courses.observeSemesterCourses(active.semester.id).map { courseRows ->
+                    val semester = active.toModel()
+                    val arrangements = courseRows.map { it.toArrangement() }
+                    RepoResult.Ok(ScheduleRules.todaySchedule(semester, arrangements, today, now))
+                }
+            }
         }.asReadResult()
 
     override suspend fun weekPosition(semesterId: Long, today: LocalDate): RepoResult<WeekPosition> = try {

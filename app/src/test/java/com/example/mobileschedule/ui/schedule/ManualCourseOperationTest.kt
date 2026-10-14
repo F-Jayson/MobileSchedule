@@ -247,6 +247,12 @@ class ManualCourseOperationTest {
         override fun observeImportStatus(semesterId: Long): Flow<RepoResult<SemesterImportStatus>> =
             flowOf(RepoResult.Ok(SemesterImportStatus(semesterId, emptyList())))
 
+        override fun observeTodaySchedule(
+            today: LocalDate,
+            now: java.time.LocalTime,
+        ): Flow<RepoResult<TodaySchedule>> =
+            flowOf(RepoResult.Ok(TodaySchedule.NoActiveSemester))
+
         override suspend fun weekPosition(semesterId: Long, today: LocalDate): RepoResult<WeekPosition> =
             RepoResult.Ok(WeekPosition.InSemester(1))
 

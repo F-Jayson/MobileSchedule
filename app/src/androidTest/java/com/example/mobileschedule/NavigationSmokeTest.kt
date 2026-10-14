@@ -25,7 +25,7 @@ class NavigationSmokeTest {
     fun compactVerticalNavigationKeepsLabelsWithinTheBarAndOpensSettings() {
         compose.waitUntil(timeoutMillis = 30_000) { hasTag("tab_schedule") }
         val bar = compose.onNodeWithTag("main_bottom_navigation").getUnclippedBoundsInRoot()
-        listOf("课表", "设置").forEach { label ->
+        listOf("课表", "今日", "设置").forEach { label ->
             val bounds = compose.onNodeWithText(label, useUnmergedTree = true).getUnclippedBoundsInRoot()
             assertTrue("$label must fit vertically inside the navigation bar: $bounds / $bar",
                 bounds.top >= bar.top && bounds.bottom <= bar.bottom)
@@ -33,6 +33,9 @@ class NavigationSmokeTest {
                 bounds.top >= (bar.top + bar.bottom) / 2)
         }
         saveScreenshot("vertical-navigation-schedule.png")
+        compose.onNodeWithTag("tab_today").performClick()
+        compose.onNodeWithTag("today_page").assertIsDisplayed()
+        compose.onNodeWithTag("tab_today").assertIsSelected()
         compose.onNodeWithTag("tab_settings").performClick()
         compose.onNodeWithTag("settings_page").assertIsDisplayed()
         compose.onNodeWithTag("tab_settings").assertIsSelected()
@@ -52,7 +55,7 @@ class NavigationSmokeTest {
         }
         compose.onNodeWithTag(initialTag).assertIsDisplayed()
         compose.onNodeWithTag("tab_schedule").assertIsSelected()
-        compose.onNodeWithTag("tab_today").assertDoesNotExist()
+        compose.onNodeWithTag("tab_today").assertIsDisplayed()
         if (firstRun) saveScreenshot("schedule-first-run.png")
         if (hasTag("schedule_import")) {
             compose.onNodeWithTag("schedule_import").performClick()

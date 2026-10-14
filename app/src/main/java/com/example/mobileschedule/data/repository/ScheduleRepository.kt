@@ -13,9 +13,11 @@ import com.example.mobileschedule.data.model.SemesterImportStatus
 import com.example.mobileschedule.data.model.Semester
 import com.example.mobileschedule.data.model.SemesterConfig
 import com.example.mobileschedule.data.model.SemesterConfigDraft
+import com.example.mobileschedule.data.model.TodaySchedule
 import com.example.mobileschedule.data.model.WeekPosition
 import com.example.mobileschedule.data.model.WeekSchedule
 import java.time.LocalDate
+import java.time.LocalTime
 import kotlinx.coroutines.flow.Flow
 
 /** Contract v1.1 plus the active-week and import-status read models required by task 2.4. */
@@ -27,6 +29,10 @@ interface ScheduleRepository {
     fun observeActiveWeek(selectedWeek: Int): Flow<RepoResult<ActiveWeek?>>
     fun observeCourseDetail(arrangementId: Long): Flow<RepoResult<CourseDetail?>>
     fun observeImportStatus(semesterId: Long): Flow<RepoResult<SemesterImportStatus>>
+    fun observeTodaySchedule(
+        today: LocalDate = LocalDate.now(),
+        now: LocalTime = LocalTime.now(),
+    ): Flow<RepoResult<TodaySchedule>>
     suspend fun weekPosition(semesterId: Long, today: LocalDate): RepoResult<WeekPosition>
 
     suspend fun createSemester(draft: SemesterConfigDraft): RepoResult<Semester>

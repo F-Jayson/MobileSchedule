@@ -46,12 +46,15 @@ import com.example.mobileschedule.ui.settings.SettingsHomeViewModel
 import com.example.mobileschedule.ui.settings.SettingsUpdateHost
 import com.example.mobileschedule.ui.settings.ScheduleManagementRoute
 
+import com.example.mobileschedule.ui.today.TodayRoute
+
 private enum class Destination(
     val route: String,
     @param:StringRes val label: Int,
     @param:DrawableRes val icon: Int,
 ) {
     SCHEDULE("schedule", R.string.tab_schedule, R.drawable.ic_schedule),
+    TODAY("today", R.string.tab_today, R.drawable.ic_today),
     SETTINGS("settings", R.string.tab_settings, R.drawable.ic_settings),
 }
 
@@ -110,6 +113,13 @@ fun MobileScheduleApp() {
                 ScheduleRoute(onConfigure = { navController.navigate("config/new") },
                     onSettings = { navController.navigate(Destination.SETTINGS.route) },
                     onImport = { navController.navigate("import") })
+            }
+            composable(Destination.TODAY.route) {
+                TodayRoute(
+                    onConfigure = { navController.navigate("config/new") },
+                    onSettings = { navController.navigate(Destination.SETTINGS.route) },
+                    onImport = { navController.navigate("import") },
+                )
             }
             composable("schedule/display-settings") {
                 ScheduleDisplaySettingsRoute(onBack = { navController.popBackStack() })
