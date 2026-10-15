@@ -17,6 +17,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.compositeOver
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -147,9 +148,7 @@ private fun TodayContent(
     onImport: () -> Unit,
 ) {
     Column(
-        Modifier
-            .fillMaxSize()
-            .statusBarsPadding()
+        Modifier.fillMaxSize()
     ) {
         when (schedule) {
             is TodaySchedule.NoActiveSemester -> {
@@ -204,7 +203,7 @@ private fun TodaySimpleHeader(date: LocalDate, subtitle: String) {
     Column(
         Modifier
             .fillMaxWidth()
-            .padding(horizontal = 20.dp, vertical = 14.dp)
+            .padding(start = 20.dp, end = 20.dp, top = 20.dp, bottom = 12.dp)
             .testTag("today_header"),
     ) {
         val dateText = date.format(DateTimeFormatter.ofPattern("M月d日"))
@@ -261,7 +260,7 @@ private fun TodayReadyScheduleView(
     Column(
         Modifier
             .fillMaxWidth()
-            .padding(horizontal = 20.dp, vertical = 12.dp)
+            .padding(start = 20.dp, end = 20.dp, top = 20.dp, bottom = 12.dp)
             .testTag("today_header"),
     ) {
         Row(
@@ -478,18 +477,27 @@ private fun TodayCourseCard(
     val cardBorder = when (item.status) {
         CourseStatus.CURRENT -> BorderStroke(2.dp, MaterialTheme.colorScheme.primary)
         CourseStatus.UPCOMING -> if (item.isNext) BorderStroke(1.5.dp, palette.accent) else null
-        CourseStatus.PAST -> null
+        CourseStatus.PAST -> BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.6f))
     }
 
-    val cardAlpha = if (item.status == CourseStatus.PAST) 0.65f else 1f
+    val containerColor = when (item.status) {
+        CourseStatus.PAST -> palette.container.copy(alpha = 0.35f).compositeOver(MaterialTheme.colorScheme.surface)
+        else -> palette.container
+    }
+
+    val cardElevation = when (item.status) {
+        CourseStatus.CURRENT -> 3.dp
+        CourseStatus.UPCOMING -> 1.dp
+        CourseStatus.PAST -> 0.dp
+    }
 
     Card(
         shape = RoundedCornerShape(18.dp),
         colors = CardDefaults.cardColors(
-            containerColor = palette.container.copy(alpha = cardAlpha),
+            containerColor = containerColor,
         ),
         border = cardBorder,
-        elevation = CardDefaults.cardElevation(defaultElevation = if (item.status == CourseStatus.CURRENT) 3.dp else 1.dp),
+        elevation = CardDefaults.cardElevation(defaultElevation = cardElevation),
         modifier = Modifier
             .fillMaxWidth()
             .clickable(onClick = onClick)
@@ -517,7 +525,7 @@ private fun TodayCourseCard(
                     text = timeSpan,
                     style = MaterialTheme.typography.labelMedium,
                     fontWeight = FontWeight.SemiBold,
-                    color = palette.accent,
+                    color = if (item.status == CourseStatus.PAST) palette.accent.copy(alpha = 0.7f) else palette.accent,
                     modifier = Modifier.testTag("today_course_time_${arrangement.id}"),
                 )
 
@@ -530,7 +538,11 @@ private fun TodayCourseCard(
                 text = arrangement.name,
                 style = MaterialTheme.typography.titleMedium,
                 fontWeight = FontWeight.Bold,
-                color = MaterialTheme.colorScheme.onSurface,
+                color = if (item.status == CourseStatus.PAST) {
+                    MaterialTheme.colorScheme.onSurface.copy(alpha = 0.65f)
+                } else {
+                    MaterialTheme.colorScheme.onSurface
+                },
                 maxLines = 2,
                 overflow = TextOverflow.Ellipsis,
                 modifier = Modifier.testTag("today_course_name_${arrangement.id}"),

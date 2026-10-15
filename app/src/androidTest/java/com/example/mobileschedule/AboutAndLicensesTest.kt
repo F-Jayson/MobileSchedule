@@ -196,7 +196,8 @@ class AboutAndLicensesTest {
             }
         }
 
-        // Verify About entry in Settings page
+        // Scroll to About entry in Settings page if needed
+        compose.onNodeWithTag("settings_page").performScrollToNode(hasTestTag("settings_about_entry"))
         compose.onNodeWithTag("settings_about_entry").assertIsDisplayed()
         compose.onNodeWithText("关于与帮助").assertIsDisplayed()
         compose.onNodeWithText("版本、环境信息、开源许可与隐私说明").assertIsDisplayed()

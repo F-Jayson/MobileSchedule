@@ -117,6 +117,51 @@ class TodayUiTest {
     }
 
     @Test
+    fun testPastCourseCardRendering() {
+        val pastCourse = CourseArrangement(
+            id = 1L,
+            semesterId = 1L,
+            name = "高级数据库开发",
+            teacher = "倪友聪",
+            location = "笃行1-509",
+            dayOfWeek = 4,
+            startSection = 1,
+            endSection = 2,
+            weeks = (1..16).toSet(),
+            origin = CourseOrigin.SchoolImport(SourceScope("fjnu", "dom", "2026-1"), "batch-1", "entry-1"),
+        )
+        val items = listOf(
+            TodayCourseItem(
+                arrangement = pastCourse,
+                startTime = LocalTime.of(8, 20),
+                endTime = LocalTime.of(10, 0),
+                status = CourseStatus.PAST,
+                isNext = false,
+            ),
+        )
+        val schedule = TodaySchedule.Ready(
+            semester = semester,
+            currentWeek = 7,
+            date = LocalDate.of(2026, 10, 15),
+            dayOfWeek = 4,
+            courses = items,
+        )
+
+        compose.setContent {
+            MobileScheduleTheme {
+                TodayScreen(
+                    state = TodayUiState.Ready(schedule, LocalTime.of(11, 0)),
+                )
+            }
+        }
+
+        saveSyntheticScreenshot(
+            "today-schedule-past.png",
+            compose.onNodeWithTag("today_page").captureToImage().asAndroidBitmap(),
+        )
+    }
+
+    @Test
     fun todayScreenRendersEmptyStateWhenNoCourses() {
         val schedule = TodaySchedule.Ready(
             semester = semester,
@@ -168,5 +213,11 @@ class TodayUiTest {
             "today-schedule-before.png",
             compose.onNodeWithTag("today_page").captureToImage().asAndroidBitmap(),
         )
+    }
+
+    @Test
+    fun testLunarDateCalculationForOctober15() {
+        val lunar = com.example.mobileschedule.ui.today.LunarCalendarHelper.getLunarDateString(LocalDate.of(2026, 10, 15))
+        assertEquals("农历九月初六", lunar)
     }
 }

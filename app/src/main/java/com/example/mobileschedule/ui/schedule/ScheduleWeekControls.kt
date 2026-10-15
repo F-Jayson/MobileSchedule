@@ -96,14 +96,6 @@ internal fun ScheduleSemesterHeader(
                             )
                         }
                     }
-                    if (state.week.schedule.arrangements.isEmpty()) {
-                        Text(
-                            "本周没有课程安排",
-                            modifier = Modifier.padding(top = 4.dp).testTag("schedule_week_empty"),
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            style = MaterialTheme.typography.bodySmall,
-                        )
-                    }
                 }
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     FilledTonalButton(

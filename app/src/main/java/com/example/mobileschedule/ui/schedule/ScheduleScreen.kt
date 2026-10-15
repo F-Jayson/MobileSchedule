@@ -61,11 +61,16 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withTimeoutOrNull
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clipToBounds
@@ -278,18 +283,6 @@ fun ScheduleScreen(
                         onWeekTitleClick = { showWeekPicker = true },
                         onPreviousWeek = onPreviousWeek, onNextWeek = onNextWeek,
                     )
-                    FloatingActionButton(
-                        onClick = onAddCourse,
-                        shape = CircleShape,
-                        containerColor = MaterialTheme.colorScheme.primaryContainer,
-                        contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
-                        modifier = Modifier
-                            .align(Alignment.BottomEnd)
-                            .padding(16.dp)
-                            .testTag("schedule_add_course_fab"),
-                    ) {
-                        Text("+", fontSize = 24.sp, fontWeight = FontWeight.Bold)
-                    }
                 }
                 ScheduleWeekControls(state, onPreviousWeek, onNextWeek, onReturnToCurrentWeek)
             }
@@ -385,12 +378,34 @@ fun WeekScheduleGrid(
     val swipeThresholdPx = with(density) { 64.dp.toPx() }
     val coroutineScope = rememberCoroutineScope()
     val dragOffset = remember { Animatable(0f) }
+    var displayedWeek by remember(week.semester.id) { mutableIntStateOf(schedule.week) }
+    var isTransitioning by remember { mutableStateOf(false) }
+
+    LaunchedEffect(schedule.week) {
+        displayedWeek = schedule.week
+        if (dragOffset.value != 0f) {
+            dragOffset.snapTo(0f)
+        }
+    }
+
+    val arrangementCache = remember(week.semester.id) { mutableStateMapOf<Long, CourseArrangement>() }
+    LaunchedEffect(schedule) {
+        schedule.arrangements.forEach { arrangement ->
+            arrangementCache[arrangement.id] = arrangement
+        }
+    }
+
     var overlappingCourses by remember { mutableStateOf<List<com.example.mobileschedule.data.model.CourseArrangement>?>(null) }
 
     fun getWeekSchedule(weekNum: Int): WeekSchedule {
         if (weekNum == schedule.week) return schedule
         val monday = config.firstWeekMonday.plusWeeks((weekNum - 1).toLong())
-        val arrangements = schedule.arrangements.filter { weekNum in it.weeks }
+        val knownArrangements = if (arrangementCache.isNotEmpty()) {
+            arrangementCache.values.toList()
+        } else {
+            schedule.arrangements
+        }
+        val arrangements = knownArrangements.filter { weekNum in it.weeks }
         return WeekSchedule(
             semesterId = week.semester.id,
             week = weekNum,
@@ -411,42 +426,66 @@ fun WeekScheduleGrid(
         val gridHeight = rowHeight * config.totalSections
         val compactHeader = dayWidth < 45.dp || fontScale > 1.3f
         val gridWidthPx = with(density) { gridWidth.toPx() }
-        val hasWeekendCourses = schedule.arrangements.any { it.dayOfWeek in 6..7 }
+        val hasWeekendCourses = getWeekSchedule(displayedWeek).arrangements.any { it.dayOfWeek in 6..7 }
 
         Column(
             Modifier.fillMaxSize()
-                .pointerInput(schedule.week, config.totalWeeks) {
+                .pointerInput(displayedWeek, config.totalWeeks) {
                     var totalDrag = 0f
                     detectHorizontalDragGestures(
                         onDragStart = {
-                            totalDrag = 0f
+                            if (!isTransitioning) {
+                                totalDrag = 0f
+                            }
                         },
                         onDragEnd = {
+                            if (isTransitioning) return@detectHorizontalDragGestures
                             val threshold = (gridWidthPx * 0.18f).coerceAtLeast(swipeThresholdPx)
-                            coroutineScope.launch {
-                                if (totalDrag <= -threshold && schedule.week < config.totalWeeks) {
-                                    dragOffset.animateTo(-gridWidthPx, tween(200, easing = FastOutSlowInEasing))
-                                    onNextWeek()
-                                    dragOffset.snapTo(0f)
-                                } else if (totalDrag >= threshold && schedule.week > 1) {
-                                    dragOffset.animateTo(gridWidthPx, tween(200, easing = FastOutSlowInEasing))
-                                    onPreviousWeek()
-                                    dragOffset.snapTo(0f)
-                                } else {
+                            if (totalDrag <= -threshold && displayedWeek < config.totalWeeks) {
+                                isTransitioning = true
+                                coroutineScope.launch {
+                                    try {
+                                        val nextWeek = displayedWeek + 1
+                                        dragOffset.animateTo(-gridWidthPx, tween(200, easing = FastOutSlowInEasing))
+                                        displayedWeek = nextWeek
+                                        dragOffset.snapTo(0f)
+                                        onNextWeek()
+                                    } finally {
+                                        isTransitioning = false
+                                    }
+                                }
+                            } else if (totalDrag >= threshold && displayedWeek > 1) {
+                                isTransitioning = true
+                                coroutineScope.launch {
+                                    try {
+                                        val prevWeek = displayedWeek - 1
+                                        dragOffset.animateTo(gridWidthPx, tween(200, easing = FastOutSlowInEasing))
+                                        displayedWeek = prevWeek
+                                        dragOffset.snapTo(0f)
+                                        onPreviousWeek()
+                                    } finally {
+                                        isTransitioning = false
+                                    }
+                                }
+                            } else {
+                                coroutineScope.launch {
                                     dragOffset.animateTo(0f, spring(dampingRatio = 0.85f, stiffness = 500f))
                                 }
                             }
                         },
                         onDragCancel = {
-                            coroutineScope.launch {
-                                dragOffset.animateTo(0f, spring(dampingRatio = 0.85f, stiffness = 500f))
+                            if (!isTransitioning) {
+                                coroutineScope.launch {
+                                    dragOffset.animateTo(0f, spring(dampingRatio = 0.85f, stiffness = 500f))
+                                }
                             }
                         },
                         onHorizontalDrag = { change, dragAmount ->
+                            if (isTransitioning) return@detectHorizontalDragGestures
                             change.consume()
                             totalDrag += dragAmount
-                            val canGoLeft = schedule.week < config.totalWeeks
-                            val canGoRight = schedule.week > 1
+                            val canGoLeft = displayedWeek < config.totalWeeks
+                            val canGoRight = displayedWeek > 1
                             val clamped = when {
                                 totalDrag < 0 && !canGoLeft -> totalDrag * 0.35f
                                 totalDrag > 0 && !canGoRight -> totalDrag * 0.35f
@@ -471,7 +510,7 @@ fun WeekScheduleGrid(
                         contentPadding = androidx.compose.foundation.layout.PaddingValues(0.dp),
                     ) {
                         AnimatedContent(
-                            targetState = schedule.week,
+                            targetState = displayedWeek,
                             transitionSpec = {
                                 (fadeIn(animationSpec = tween(220)) + scaleIn(initialScale = 0.85f, animationSpec = tween(220)))
                                     .togetherWith(fadeOut(animationSpec = tween(180)) + scaleOut(targetScale = 1.15f, animationSpec = tween(180)))
@@ -513,7 +552,7 @@ fun WeekScheduleGrid(
                     val offset = dragOffset.value
                     // 当前周日期
                     WeekHeaderRow(
-                        schedule = schedule,
+                        schedule = getWeekSchedule(displayedWeek),
                         firstWeekMonday = config.firstWeekMonday,
                         today = today,
                         dayWidth = dayWidth,
@@ -524,9 +563,9 @@ fun WeekScheduleGrid(
                             .testTag("week_header"),
                     )
                     // 向左拖动时右侧滑入的下一周日期
-                    if (offset < 0f && schedule.week < config.totalWeeks) {
+                    if (offset < 0f && displayedWeek < config.totalWeeks) {
                         WeekHeaderRow(
-                            schedule = getWeekSchedule(schedule.week + 1),
+                            schedule = getWeekSchedule(displayedWeek + 1),
                             firstWeekMonday = config.firstWeekMonday,
                             today = today,
                             dayWidth = dayWidth,
@@ -537,9 +576,9 @@ fun WeekScheduleGrid(
                         )
                     }
                     // 向右拖动时左侧滑入的上一周日期
-                    if (offset > 0f && schedule.week > 1) {
+                    if (offset > 0f && displayedWeek > 1) {
                         WeekHeaderRow(
-                            schedule = getWeekSchedule(schedule.week - 1),
+                            schedule = getWeekSchedule(displayedWeek - 1),
                             firstWeekMonday = config.firstWeekMonday,
                             today = today,
                             dayWidth = dayWidth,
@@ -590,7 +629,7 @@ fun WeekScheduleGrid(
                     // 当前周网格及课程
                     Box(Modifier.fillMaxSize().graphicsLayer { translationX = offset }) {
                         WeekScheduleContent(
-                            schedule = schedule,
+                            schedule = getWeekSchedule(displayedWeek),
                             today = today,
                             config = config,
                             dayWidth = dayWidth,
@@ -605,10 +644,10 @@ fun WeekScheduleGrid(
                     }
 
                     // 向左拖动时右侧滑入的下一周网格及课程
-                    if (offset < 0f && schedule.week < config.totalWeeks) {
+                    if (offset < 0f && displayedWeek < config.totalWeeks) {
                         Box(Modifier.fillMaxSize().graphicsLayer { translationX = offset + gridWidthPx }) {
                             WeekScheduleContent(
-                                schedule = getWeekSchedule(schedule.week + 1),
+                                schedule = getWeekSchedule(displayedWeek + 1),
                                 today = today,
                                 config = config,
                                 dayWidth = dayWidth,
@@ -624,10 +663,10 @@ fun WeekScheduleGrid(
                     }
 
                     // 向右拖动时左侧滑入的上一周网格及课程
-                    if (offset > 0f && schedule.week > 1) {
+                    if (offset > 0f && displayedWeek > 1) {
                         Box(Modifier.fillMaxSize().graphicsLayer { translationX = offset - gridWidthPx }) {
                             WeekScheduleContent(
-                                schedule = getWeekSchedule(schedule.week - 1),
+                                schedule = getWeekSchedule(displayedWeek - 1),
                                 today = today,
                                 config = config,
                                 dayWidth = dayWidth,
@@ -801,6 +840,29 @@ private fun WeekScheduleContent(
                 }
             }
         }
+        if (schedule.arrangements.isEmpty()) {
+            Box(
+                Modifier.fillMaxSize(),
+                contentAlignment = Alignment.Center,
+            ) {
+                Surface(
+                    shape = RoundedCornerShape(16.dp),
+                    color = MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0.9f),
+                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)),
+                    shadowElevation = 2.dp,
+                ) {
+                    Text(
+                        "本周没有课程安排",
+                        modifier = Modifier
+                            .padding(horizontal = 20.dp, vertical = 10.dp)
+                            .then(if (isCurrentPage) Modifier.testTag("schedule_week_empty") else Modifier),
+                        style = MaterialTheme.typography.bodyMedium,
+                        fontWeight = FontWeight.Medium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+            }
+        }
     }
 }
 
@@ -908,8 +970,8 @@ private fun WeekGridCard(
             } else {
                 Text(
                     course.name,
-                    maxLines = 3,
-                    overflow = TextOverflow.Ellipsis,
+                    maxLines = if (displayOptions.showFullCourseName) Int.MAX_VALUE else 3,
+                    overflow = if (displayOptions.showFullCourseName) TextOverflow.Clip else TextOverflow.Ellipsis,
                     fontWeight = FontWeight.SemiBold,
                     color = palette.onContainer,
                     style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp, lineHeight = 12.sp),

@@ -8,6 +8,7 @@ import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
@@ -24,6 +25,11 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
+import androidx.compose.ui.input.nestedscroll.NestedScrollSource
+import androidx.compose.ui.input.nestedscroll.nestedScroll
+import androidx.compose.ui.unit.Velocity
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.DropdownMenu
@@ -169,6 +175,42 @@ fun CourseFormSheet(
         }
     }
 
+    val scrollState = rememberScrollState()
+    val nestedScrollConnection = remember {
+        object : NestedScrollConnection {
+            override fun onPostScroll(
+                consumed: Offset,
+                available: Offset,
+                source: NestedScrollSource,
+            ): Offset {
+                // When inner scroll reaches the bottom and the user continues dragging upwards (available.y < 0),
+                // consume the leftover delta to prevent it from propagating to ModalBottomSheet's sheet drag
+                // and triggering the infinite layout remeasuring oscillation.
+                return if (available.y < 0f) {
+                    Offset(0f, available.y)
+                } else {
+                    Offset.Zero
+                }
+            }
+
+            override suspend fun onPreFling(available: Velocity): Velocity {
+                return if (!scrollState.canScrollForward && available.y < 0f) {
+                    available
+                } else {
+                    Velocity.Zero
+                }
+            }
+
+            override suspend fun onPostFling(consumed: Velocity, available: Velocity): Velocity {
+                return if (available.y < 0f) {
+                    Velocity(0f, available.y)
+                } else {
+                    Velocity.Zero
+                }
+            }
+        }
+    }
+
     ModalBottomSheet(
         onDismissRequest = onDismiss,
         sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
@@ -176,49 +218,52 @@ fun CourseFormSheet(
         containerColor = MaterialTheme.colorScheme.surface,
         modifier = Modifier.testTag("course_form_sheet"),
     ) {
-        Column(
-            Modifier
-                .fillMaxWidth()
-                .heightIn(max = 680.dp)
-        ) {
-            // Header
-            Row(
-                Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 20.dp, vertical = 10.dp),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Column {
-                    Text(
-                        when {
-                            isEdit -> "编辑课程"
-                            isCopy -> "复制为手动课程"
-                            else -> "添加课程"
-                        },
-                        style = MaterialTheme.typography.titleLarge,
-                        fontWeight = FontWeight.Bold,
-                        modifier = Modifier.testTag("course_form_title"),
-                    )
-                    Text(
-                        "填写课程信息、上课时间与周次安排",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                }
-                TextButton(onClick = onDismiss, modifier = Modifier.testTag("course_form_cancel")) {
-                    Text("取消")
-                }
-            }
-
-            // Scrollable Content
+        BoxWithConstraints(Modifier.fillMaxWidth()) {
+            val sheetMaxHeight = (maxHeight * 0.9f).coerceIn(480.dp, 720.dp)
             Column(
                 Modifier
-                    .weight(1f, fill = false)
-                    .verticalScroll(rememberScrollState())
-                    .padding(horizontal = 20.dp, vertical = 6.dp),
-                verticalArrangement = Arrangement.spacedBy(16.dp),
+                    .fillMaxWidth()
+                    .heightIn(max = sheetMaxHeight)
             ) {
+                // Header
+                Row(
+                    Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 20.dp, vertical = 10.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Column {
+                        Text(
+                            when {
+                                isEdit -> "编辑课程"
+                                isCopy -> "复制为手动课程"
+                                else -> "添加课程"
+                            },
+                            style = MaterialTheme.typography.titleLarge,
+                            fontWeight = FontWeight.Bold,
+                            modifier = Modifier.testTag("course_form_title"),
+                        )
+                        Text(
+                            "填写课程信息、上课时间与周次安排",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                    TextButton(onClick = onDismiss, modifier = Modifier.testTag("course_form_cancel")) {
+                        Text("取消")
+                    }
+                }
+
+                // Scrollable Content
+                Column(
+                    Modifier
+                        .weight(1f, fill = false)
+                        .nestedScroll(nestedScrollConnection)
+                        .verticalScroll(scrollState)
+                        .padding(horizontal = 20.dp, vertical = 6.dp),
+                    verticalArrangement = Arrangement.spacedBy(16.dp),
+                ) {
                 // Course Name
                 OutlinedTextField(
                     value = name,
@@ -546,6 +591,7 @@ fun CourseFormSheet(
             }
         }
     }
+}
 }
 
 @Composable

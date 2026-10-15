@@ -19,6 +19,7 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -121,12 +122,25 @@ fun OnlineImportPreviewScreen(
     }
     Scaffold(modifier = Modifier.fillMaxSize().testTag("online_import_preview"),
         contentWindowInsets = WindowInsets(0),
-        topBar = { TopAppBar(title = { Text("导入预览") }, windowInsets = WindowInsets(0),
-            navigationIcon = { TextButton(onClick = if (state is OnlineImportPreviewState.Saved)
-                onOpenSchedule else onBack, enabled = state !is OnlineImportPreviewState.Saving,
-                modifier = Modifier.testTag("preview_back")) {
-                Text(if (state is OnlineImportPreviewState.Saved) "完成" else "返回")
-            } }) },
+        topBar = {
+            TopAppBar(
+                title = { Text("导入预览") },
+                windowInsets = WindowInsets(0),
+                colors = TopAppBarDefaults.topAppBarColors(
+                    containerColor = MaterialTheme.colorScheme.background,
+                    scrolledContainerColor = MaterialTheme.colorScheme.background,
+                ),
+                navigationIcon = {
+                    TextButton(
+                        onClick = if (state is OnlineImportPreviewState.Saved) onOpenSchedule else onBack,
+                        enabled = state !is OnlineImportPreviewState.Saving,
+                        modifier = Modifier.testTag("preview_back"),
+                    ) {
+                        Text(if (state is OnlineImportPreviewState.Saved) "完成" else "返回")
+                    }
+                },
+            )
+        },
         bottomBar = {
             if (summary != null) {
                 Column(Modifier.fillMaxWidth().padding(12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {

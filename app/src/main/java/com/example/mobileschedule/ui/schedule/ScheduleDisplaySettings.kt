@@ -43,6 +43,7 @@ data class ScheduleDisplayOptions(
     val showTeacher: Boolean = true,
     val showWeekend: Boolean = true,
     val firstDayOfWeek: DayOfWeek = DayOfWeek.MONDAY,
+    val showFullCourseName: Boolean = false,
 )
 
 /** Presentation-only choices; imported courses and semester configuration remain in Room. */
@@ -67,6 +68,7 @@ class ScheduleDisplaySettingsStore(context: Context, preferencesName: String = "
             showTeacher = preferences.getBoolean("show_teacher", true),
             showWeekend = showWeekend,
             firstDayOfWeek = firstDay,
+            showFullCourseName = preferences.getBoolean("show_full_course_name", false),
         )
     }
 
@@ -76,6 +78,7 @@ class ScheduleDisplaySettingsStore(context: Context, preferencesName: String = "
             .putBoolean("show_teacher", options.showTeacher)
             .putBoolean("show_weekend", options.showWeekend)
             .putString("first_day_of_week", options.firstDayOfWeek.name)
+            .putBoolean("show_full_course_name", options.showFullCourseName)
             .commit()
         val ok2 = appPreferences.saveShowWeekend(options.showWeekend)
         val ok3 = appPreferences.saveFirstDayOfWeek(options.firstDayOfWeek)
@@ -120,7 +123,8 @@ fun ScheduleDisplaySettingsScreen(
                 title = { Text("课表显示设置", fontWeight = FontWeight.Bold) },
                 windowInsets = WindowInsets(0),
                 colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = MaterialTheme.colorScheme.surface,
+                    containerColor = MaterialTheme.colorScheme.background,
+                    scrolledContainerColor = MaterialTheme.colorScheme.background,
                 ),
                 navigationIcon = {
                     TextButton(
@@ -194,6 +198,24 @@ fun ScheduleDisplaySettingsScreen(
                             checked = options.showTeacher,
                             onCheckedChange = { onOptionsChange(options.copy(showTeacher = it)) },
                             modifier = Modifier.testTag("display_teacher_switch"),
+                        )
+                    }
+
+                    Row(
+                        Modifier
+                            .fillMaxWidth()
+                            .clickable { onOptionsChange(options.copy(showFullCourseName = !options.showFullCourseName)) }
+                            .padding(vertical = 12.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Column(Modifier.weight(1f)) {
+                            Text("显示课程全名", fontWeight = FontWeight.SemiBold, style = MaterialTheme.typography.bodyLarge)
+                            Text("关闭时过长名称截断并显示为省略号，开启时完整显示课程名称", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.outline)
+                        }
+                        Switch(
+                            checked = options.showFullCourseName,
+                            onCheckedChange = { onOptionsChange(options.copy(showFullCourseName = it)) },
+                            modifier = Modifier.testTag("display_full_course_name_switch"),
                         )
                     }
                 }

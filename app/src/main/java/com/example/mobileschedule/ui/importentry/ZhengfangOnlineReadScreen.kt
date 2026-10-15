@@ -30,6 +30,7 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -300,10 +301,21 @@ fun ZhengfangOnlineReadScreen(
 
     Scaffold(modifier = Modifier.fillMaxSize().testTag("online_read_page"),
         contentWindowInsets = WindowInsets(0),
-        topBar = { TopAppBar(title = { Text("福建师大课表读取") }, windowInsets = WindowInsets(0),
-            navigationIcon = { TextButton(onClick = ::exit, modifier = Modifier.testTag("online_back")) {
-                Text("退出")
-            } }) },
+        topBar = {
+            TopAppBar(
+                title = { Text("福建师大课表读取") },
+                windowInsets = WindowInsets(0),
+                colors = TopAppBarDefaults.topAppBarColors(
+                    containerColor = MaterialTheme.colorScheme.background,
+                    scrolledContainerColor = MaterialTheme.colorScheme.background,
+                ),
+                navigationIcon = {
+                    TextButton(onClick = ::exit, modifier = Modifier.testTag("online_back")) {
+                        Text("退出")
+                    }
+                },
+            )
+        },
     ) { padding ->
         Column(Modifier.fillMaxSize().padding(padding).padding(horizontal = 12.dp),
             verticalArrangement = Arrangement.spacedBy(6.dp)) {

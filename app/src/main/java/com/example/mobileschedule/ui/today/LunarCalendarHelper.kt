@@ -16,21 +16,37 @@ object LunarCalendarHelper {
     fun getLunarDateString(date: LocalDate): String {
         return try {
             val calClass = Class.forName("android.icu.util.ChineseCalendar")
-            val cal = calClass.getDeclaredConstructor().newInstance()
-            val setMethod = calClass.getMethod("set", Int::class.javaPrimitiveType, Int::class.javaPrimitiveType)
+            val tzClass = Class.forName("android.icu.util.TimeZone")
+            val getTimeZoneMethod = tzClass.getMethod("getTimeZone", String::class.java)
+            val tz = getTimeZoneMethod.invoke(null, "GMT+8")
+
+            val cal = try {
+                val tzConstructor = calClass.getConstructor(tzClass)
+                tzConstructor.newInstance(tz)
+            } catch (_: Throwable) {
+                val defaultInstance = calClass.getDeclaredConstructor().newInstance()
+                try {
+                    calClass.getMethod("setTimeZone", tzClass).invoke(defaultInstance, tz)
+                } catch (_: Throwable) {}
+                defaultInstance
+            }
+
+            val setTimeInMillisMethod = calClass.getMethod("setTimeInMillis", Long::class.javaPrimitiveType)
             val getMethod = calClass.getMethod("get", Int::class.javaPrimitiveType)
 
-            val fieldYear = 1
+            val millis = date.atTime(12, 0).atZone(java.time.ZoneId.of("Asia/Shanghai")).toInstant().toEpochMilli()
+            setTimeInMillisMethod.invoke(cal, millis)
+
             val fieldMonth = 2
             val fieldDate = 5
-            val fieldIsLeap = 22
-
-            setMethod.invoke(cal, fieldYear, date.year)
-            setMethod.invoke(cal, fieldMonth, date.monthValue - 1)
-            setMethod.invoke(cal, fieldDate, date.dayOfMonth)
+            val isLeapField = try {
+                calClass.getField("IS_LEAP_MONTH").getInt(null)
+            } catch (_: Throwable) {
+                22
+            }
 
             val month = getMethod.invoke(cal, fieldMonth) as Int
-            val isLeap = (getMethod.invoke(cal, fieldIsLeap) as? Int ?: 0) == 1
+            val isLeap = (getMethod.invoke(cal, isLeapField) as? Int ?: 0) == 1
             val day = getMethod.invoke(cal, fieldDate) as Int
 
             val monthStr = (if (isLeap) "闰" else "") + (LUNAR_MONTH_NAMES.getOrNull(month) ?: "${month + 1}月")

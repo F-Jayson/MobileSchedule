@@ -82,7 +82,8 @@ fun ImportIntroScreen(
                 title = { Text("导入课程表", fontWeight = FontWeight.Bold) },
                 windowInsets = WindowInsets(0),
                 colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = MaterialTheme.colorScheme.surface,
+                    containerColor = MaterialTheme.colorScheme.background,
+                    scrolledContainerColor = MaterialTheme.colorScheme.background,
                 ),
                 navigationIcon = {
                     TextButton(onClick = onBack, modifier = Modifier.testTag("import_back")) {

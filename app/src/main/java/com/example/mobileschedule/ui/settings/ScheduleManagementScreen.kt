@@ -220,8 +220,15 @@ fun ScheduleManagementScreen(
         )
     }
     Scaffold(contentWindowInsets = WindowInsets(0), topBar = {
-        TopAppBar(title = { Text("课表管理", fontWeight = FontWeight.Bold) }, windowInsets = WindowInsets(0),
-            navigationIcon = { TextButton(onClick = onBack) { Text("返回") } })
+        TopAppBar(
+            title = { Text("课表管理", fontWeight = FontWeight.Bold) },
+            windowInsets = WindowInsets(0),
+            colors = TopAppBarDefaults.topAppBarColors(
+                containerColor = MaterialTheme.colorScheme.background,
+                scrolledContainerColor = MaterialTheme.colorScheme.background,
+            ),
+            navigationIcon = { TextButton(onClick = onBack) { Text("返回") } },
+        )
     }) { padding ->
         LazyColumn(Modifier.fillMaxSize().padding(padding).testTag("schedule_management_page"),
             contentPadding = PaddingValues(20.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {

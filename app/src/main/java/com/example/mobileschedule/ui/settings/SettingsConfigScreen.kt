@@ -25,6 +25,7 @@ import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -79,11 +80,21 @@ fun SettingsConfigScreen(
         modifier = Modifier.fillMaxSize().imePadding().testTag("config_page"),
         contentWindowInsets = WindowInsets(0),
         topBar = {
-            TopAppBar(title = { Text(if (editing != null && editing.semesterId == null) "新建学期" else "学期与节次设置") },
+            TopAppBar(
+                title = { Text(if (editing != null && editing.semesterId == null) "新建学期" else "学期与节次设置") },
                 windowInsets = WindowInsets(0),
-                navigationIcon = { TextButton(onClick = { requestBack() },
-                    enabled = editing?.saving != true && state != ConfigEditorState.Saved,
-                    modifier = Modifier.testTag("config_back")) { Text("返回") } })
+                colors = TopAppBarDefaults.topAppBarColors(
+                    containerColor = MaterialTheme.colorScheme.background,
+                    scrolledContainerColor = MaterialTheme.colorScheme.background,
+                ),
+                navigationIcon = {
+                    TextButton(
+                        onClick = { requestBack() },
+                        enabled = editing?.saving != true && state != ConfigEditorState.Saved,
+                        modifier = Modifier.testTag("config_back"),
+                    ) { Text("返回") }
+                },
+            )
         },
         bottomBar = {
             if (editing != null) Button(

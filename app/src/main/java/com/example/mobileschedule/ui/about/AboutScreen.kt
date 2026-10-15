@@ -28,10 +28,12 @@ import com.example.mobileschedule.R
 fun AboutRoute(
     onBack: () -> Unit,
     onOpenLicenses: () -> Unit,
+    onOpenChangelog: () -> Unit = {},
 ) {
     AboutScreen(
         onBack = onBack,
         onOpenLicenses = onOpenLicenses,
+        onOpenChangelog = onOpenChangelog,
     )
 }
 
@@ -39,11 +41,13 @@ fun AboutRoute(
 fun AboutScreen(
     onBack: () -> Unit,
     onOpenLicenses: () -> Unit,
+    onOpenChangelog: () -> Unit = {},
 ) {
     var showPrivacyDialog by remember { mutableStateOf(false) }
 
     Scaffold(
         modifier = Modifier.fillMaxSize().testTag("about_page"),
+        contentWindowInsets = WindowInsets(0),
         topBar = {
             AboutTopBar(onBack = onBack)
         },
@@ -73,6 +77,13 @@ fun AboutScreen(
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.Bold,
                     modifier = Modifier.padding(start = 4.dp, top = 4.dp),
+                )
+
+                AboutActionEntry(
+                    title = "更新日志（Changelog）",
+                    description = "查看应用版本迭代历史与最新功能特性",
+                    tag = "about_changelog_entry",
+                    onClick = onOpenChangelog,
                 )
 
                 AboutActionEntry(
@@ -116,6 +127,11 @@ private fun AboutTopBar(onBack: () -> Unit) {
         title = {
             Text("关于与帮助", fontWeight = FontWeight.Bold)
         },
+        windowInsets = WindowInsets(0),
+        colors = TopAppBarDefaults.topAppBarColors(
+            containerColor = MaterialTheme.colorScheme.background,
+            scrolledContainerColor = MaterialTheme.colorScheme.background,
+        ),
         navigationIcon = {
             IconButton(
                 onClick = onBack,

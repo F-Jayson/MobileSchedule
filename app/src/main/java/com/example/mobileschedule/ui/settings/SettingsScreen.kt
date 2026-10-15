@@ -23,6 +23,7 @@ fun SettingsRoute(
     onDisplaySettings: () -> Unit,
     onSelectMirror: () -> Unit,
     onAbout: () -> Unit = {},
+    onChangelog: () -> Unit = {},
     viewModel: SettingsHomeViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
@@ -45,6 +46,7 @@ fun SettingsRoute(
         themeMode = themeMode,
         onThemeModeChange = viewModel::setThemeMode,
         onAbout = onAbout,
+        onChangelog = onChangelog,
         actionError = error,
     )
 }
@@ -64,6 +66,7 @@ fun SettingsHomeScreen(
     themeMode: AppThemeMode = AppThemeMode.SYSTEM,
     onThemeModeChange: (AppThemeMode) -> Unit = {},
     onAbout: () -> Unit = {},
+    onChangelog: () -> Unit = {},
     actionError: String? = null,
 ) {
     var showThemeDialog by remember { mutableStateOf(false) }
@@ -95,6 +98,7 @@ fun SettingsHomeScreen(
         item {
             SettingsGroup("应用更新") {
                 SettingsEntry("检查新版本", "当前版本 v${BuildConfig.VERSION_NAME}", "settings_check_update", onCheckUpdate)
+                SettingsEntry("更新日志", "版本演进历史与新特性说明", "settings_changelog_entry", onChangelog)
                 SettingsEntry("更新源", selectedMirror.displayName.substringBefore(" ("), "settings_select_mirror", onSelectMirror)
                 SettingsToggle("自动检查更新", "启动时检查新版本，有更新时提醒", autoUpdate, onAutoUpdateChange, "settings_auto_update")
             }

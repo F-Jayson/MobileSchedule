@@ -51,8 +51,10 @@ class ScheduleDisplaySettingsTest {
         compose.onNodeWithTag("display_settings_page").assertIsDisplayed()
         compose.onNodeWithTag("display_location_switch").performClick()
         compose.onNodeWithTag("display_teacher_switch").performClick()
+        compose.onNodeWithTag("display_full_course_name_switch").performClick()
         compose.onNodeWithTag("display_location_switch").assertIsOff()
         compose.onNodeWithTag("display_teacher_switch").assertIsOff()
+        compose.onNodeWithTag("display_full_course_name_switch").assertIsDisplayed()
         saveSyntheticScreenshot("schedule-display-settings.png",
             compose.onNodeWithTag("display_settings_page").captureToImage().asAndroidBitmap())
     }

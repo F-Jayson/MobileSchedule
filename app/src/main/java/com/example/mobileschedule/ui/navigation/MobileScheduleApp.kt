@@ -46,6 +46,7 @@ import com.example.mobileschedule.ui.settings.SettingsHomeViewModel
 import com.example.mobileschedule.ui.settings.SettingsUpdateHost
 import com.example.mobileschedule.ui.settings.ScheduleManagementRoute
 import com.example.mobileschedule.ui.about.AboutRoute
+import com.example.mobileschedule.ui.about.ChangelogRoute
 import com.example.mobileschedule.ui.about.LicensesRoute
 import com.example.mobileschedule.ui.today.TodayRoute
 
@@ -144,20 +145,33 @@ fun MobileScheduleApp(
                 ScheduleDisplaySettingsRoute(onBack = { navController.popBackStack() })
             }
             composable(Destination.SETTINGS.route) {
-                SettingsRoute(onManageSchedule = { navController.navigate("settings/schedule-management") },
+                SettingsRoute(
+                    onManageSchedule = { navController.navigate("settings/schedule-management") },
                     onDisplaySettings = { navController.navigate("schedule/display-settings") },
                     onAbout = { navController.navigate("settings/about") },
-                    onSelectMirror = { showMirror = true }, viewModel = settingsViewModel)
+                    onChangelog = { navController.navigate("settings/changelog") },
+                    onSelectMirror = { showMirror = true },
+                    viewModel = settingsViewModel,
+                )
             }
             composable("settings/about") {
                 AboutRoute(
                     onBack = { navController.popBackStack() },
                     onOpenLicenses = { navController.navigate("settings/about/licenses") },
+                    onOpenChangelog = { navController.navigate("settings/changelog") },
                 )
             }
             composable("settings/about/licenses") {
                 LicensesRoute(
                     onBack = { navController.popBackStack() },
+                )
+            }
+            composable("settings/changelog") {
+                ChangelogRoute(
+                    onBack = { navController.popBackStack() },
+                    onStartUpdate = { info ->
+                        settingsViewModel.startDownload(info)
+                    },
                 )
             }
             composable("settings/schedule-management") {

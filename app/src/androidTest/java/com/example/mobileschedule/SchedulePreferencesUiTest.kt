@@ -48,9 +48,10 @@ class SchedulePreferencesUiTest {
         } }
         compose.onAllNodesWithTag("schedule_import").assertCountEquals(1)
         val header = compose.onNodeWithTag("schedule_semester_header").fetchSemanticsNode().boundsInRoot
+        val grid = compose.onNodeWithTag("week_grid").fetchSemanticsNode().boundsInRoot
         val hint = compose.onNodeWithTag("schedule_week_empty").fetchSemanticsNode().boundsInRoot
         val button = compose.onNodeWithTag("schedule_import").fetchSemanticsNode().boundsInRoot
-        assertTrue(header.contains(hint.center))
+        assertTrue(grid.contains(hint.center))
         assertTrue(header.contains(button.center))
         screenshot("preferences-empty-week.png", "schedule_fixture")
         compose.onNodeWithTag("schedule_import").performClick()

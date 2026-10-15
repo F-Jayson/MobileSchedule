@@ -35,9 +35,15 @@ fun LicensesScreen(onBack: () -> Unit) {
 
     Scaffold(
         modifier = Modifier.fillMaxSize().testTag("licenses_page"),
+        contentWindowInsets = WindowInsets(0),
         topBar = {
             TopAppBar(
                 title = { Text("开源许可证", fontWeight = FontWeight.Bold) },
+                windowInsets = WindowInsets(0),
+                colors = TopAppBarDefaults.topAppBarColors(
+                    containerColor = MaterialTheme.colorScheme.background,
+                    scrolledContainerColor = MaterialTheme.colorScheme.background,
+                ),
                 navigationIcon = {
                     IconButton(
                         onClick = onBack,

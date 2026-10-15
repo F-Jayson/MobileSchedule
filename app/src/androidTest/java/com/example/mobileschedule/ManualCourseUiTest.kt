@@ -68,8 +68,8 @@ class ManualCourseUiTest {
         compose.onNodeWithTag("schedule_add_course").assertIsDisplayed()
         compose.onNodeWithTag("schedule_add_course").assertHasClickAction()
 
-        // Verify FAB "+" button on bottom-right of grid
-        compose.onNodeWithTag("schedule_add_course_fab").assertIsDisplayed()
+        // Verify FAB "+" button on bottom-right of grid has been removed
+        compose.onNodeWithTag("schedule_add_course_fab").assertDoesNotExist()
 
         // Click add course
         compose.onNodeWithTag("schedule_add_course").performClick()
@@ -242,5 +242,43 @@ class ManualCourseUiTest {
 
         compose.onNodeWithTag("detail_copy_course").performClick()
         assertEquals(imported, copiedCourse)
+    }
+
+    @Test
+    fun courseFormSheetCopyModeScrollsToBottomWithoutJitter() {
+        val imported = importedCourse()
+        var savedDraft: ArrangementDraft? = null
+
+        compose.setContent {
+            MobileScheduleTheme {
+                CourseFormSheet(
+                    formState = CourseFormState.Copy(
+                        arrangement = imported,
+                        config = config,
+                    ),
+                    onDismiss = {},
+                    onSave = { draft, _ -> savedDraft = draft },
+                    onCheckConflict = { _, _ -> listOf(imported) },
+                )
+            }
+        }
+
+        compose.waitForIdle()
+        compose.onNodeWithTag("course_form_sheet").assertIsDisplayed()
+        compose.onNodeWithTag("course_form_title").assertTextContains("复制为手动课程", substring = true)
+
+        // Scroll to the bottom where conflict warning is displayed
+        compose.onNodeWithTag("course_form_conflict_warning").performScrollTo().assertIsDisplayed()
+        compose.onNodeWithText("时段重叠提醒", substring = true).assertIsDisplayed()
+        compose.onNodeWithTag("course_form_save").assertIsDisplayed()
+
+        saveSyntheticScreenshot(
+            "manual-course-form-copy-bottom.png",
+            compose.onNodeWithTag("course_form_sheet").captureToImage().asAndroidBitmap(),
+        )
+
+        // Verify save button works stably
+        compose.onNodeWithTag("course_form_save").performClick()
+        assertEquals("高等数学", savedDraft?.name)
     }
 }
