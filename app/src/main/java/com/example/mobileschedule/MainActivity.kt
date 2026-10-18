@@ -20,6 +20,7 @@ import dagger.hilt.android.AndroidEntryPoint
 class MainActivity : ComponentActivity() {
 
     private var targetCourseId by mutableStateOf<Long?>(null)
+    private var targetTab by mutableStateOf<String?>(null)
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -34,6 +35,8 @@ class MainActivity : ComponentActivity() {
                 MobileScheduleApp(
                     initialCourseId = targetCourseId,
                     onClearInitialCourseId = { targetCourseId = null },
+                    initialTab = targetTab,
+                    onClearInitialTab = { targetTab = null },
                 )
             }
         }
@@ -49,6 +52,14 @@ class MainActivity : ComponentActivity() {
         val courseId = intent?.getLongExtra(ScheduleWidgetUpdater.EXTRA_COURSE_ID, -1L) ?: -1L
         if (courseId > 0) {
             targetCourseId = courseId
+        }
+        when (intent?.action) {
+            ScheduleWidgetUpdater.ACTION_OPEN_TODAY -> {
+                targetTab = "today"
+            }
+            ScheduleWidgetUpdater.ACTION_OPEN_SCHEDULE -> {
+                targetTab = "schedule"
+            }
         }
     }
 }

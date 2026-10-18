@@ -21,6 +21,7 @@ import com.example.mobileschedule.data.preferences.AppThemeMode
 fun SettingsRoute(
     onManageSchedule: () -> Unit,
     onDisplaySettings: () -> Unit,
+    onWidgetSettings: () -> Unit = {},
     onSelectMirror: () -> Unit,
     onAbout: () -> Unit = {},
     onChangelog: () -> Unit = {},
@@ -36,6 +37,7 @@ fun SettingsRoute(
         state = state,
         onManageSchedule = onManageSchedule,
         onDisplaySettings = onDisplaySettings,
+        onWidgetSettings = onWidgetSettings,
         onCheckUpdate = { viewModel.checkUpdate() },
         selectedMirror = mirror,
         onSelectMirror = onSelectMirror,
@@ -56,6 +58,7 @@ fun SettingsHomeScreen(
     state: SettingsHomeUiState,
     onManageSchedule: () -> Unit = {},
     onDisplaySettings: () -> Unit = {},
+    onWidgetSettings: () -> Unit = {},
     onCheckUpdate: () -> Unit = {},
     selectedMirror: DownloadMirror = DownloadMirror.DEFAULT,
     onSelectMirror: () -> Unit = {},
@@ -82,10 +85,11 @@ fun SettingsHomeScreen(
             }
         }
         item {
-            SettingsGroup("外观主题") {
+            SettingsGroup("外观与样式") {
                 SettingsEntry("应用主题", themeMode.title, "settings_theme_entry") {
                     showThemeDialog = true
                 }
+                SettingsEntry("桌面小组件定制", "背景色、透明度、圆角及展示内容", "settings_widget_customization", onWidgetSettings)
             }
         }
         item {

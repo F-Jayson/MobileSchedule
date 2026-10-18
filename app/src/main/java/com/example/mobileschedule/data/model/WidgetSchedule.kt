@@ -12,6 +12,7 @@ data class WidgetCourseItem(
     val teacher: String?,
     val isOngoing: Boolean,  // true if class is currently in progress
     val isTomorrow: Boolean, // true if this is a preview of tomorrow's class
+    val isFinished: Boolean = false, // true if class has already finished today
 )
 
 /**

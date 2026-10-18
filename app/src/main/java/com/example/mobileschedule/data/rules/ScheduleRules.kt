@@ -205,6 +205,7 @@ object ScheduleRules {
         arrangements: List<CourseArrangement>,
         today: LocalDate = LocalDate.now(),
         now: LocalTime = LocalTime.now(),
+        showAllCourses: Boolean = false,
     ): WidgetScheduleData {
         val weekdays = listOf("", "周一", "周二", "周三", "周四", "周五", "周六", "周日")
         val weekdayName = weekdays.getOrElse(today.dayOfWeek.value) { "周一" }
@@ -257,6 +258,9 @@ object ScheduleRules {
                     val isOngoing = if (!isTomorrow && startTime != null && endTime != null) {
                         !now.isBefore(startTime) && !now.isAfter(endTime)
                     } else false
+                    val isFinished = if (!isTomorrow && endTime != null) {
+                        now.isAfter(endTime)
+                    } else false
 
                     val timeStr = if (startTime != null && endTime != null) {
                         "${startTime.format(timeFormatter)} - ${endTime.format(timeFormatter)}"
@@ -274,6 +278,7 @@ object ScheduleRules {
                         teacher = arrangement.teacher,
                         isOngoing = isOngoing,
                         isTomorrow = isTomorrow,
+                        isFinished = isFinished,
                     )
                 }
 
@@ -284,15 +289,18 @@ object ScheduleRules {
                     if (isPast) null else toWidgetItem(arrangement, isTomorrow = false)
                 }
 
+                val allTodayItems = todayArrangements.map { toWidgetItem(it, isTomorrow = false) }
+
                 if (remainingItems.isNotEmpty()) {
-                    val hasOngoing = remainingItems.any { it.isOngoing }
-                    val subtitle = if (hasOngoing) "正在上课" else "今日剩余课程"
+                    val displayCourses = if (showAllCourses) allTodayItems else remainingItems
+                    val hasOngoing = displayCourses.any { it.isOngoing }
+                    val subtitle = if (hasOngoing) "正在上课" else if (showAllCourses) "当日全部课程" else "今日剩余课程"
                     WidgetScheduleData.TodayCourses(
                         dateText = dateText,
                         weekText = weekText,
                         subtitle = subtitle,
-                        courses = remainingItems,
-                        totalRemainingCount = remainingItems.size,
+                        courses = displayCourses,
+                        totalRemainingCount = if (showAllCourses) allTodayItems.size else remainingItems.size,
                     )
                 } else {
                     // Today finished or no courses scheduled today -> Check tomorrow

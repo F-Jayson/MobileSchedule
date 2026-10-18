@@ -49,6 +49,7 @@ import com.example.mobileschedule.ui.about.AboutRoute
 import com.example.mobileschedule.ui.about.ChangelogRoute
 import com.example.mobileschedule.ui.about.LicensesRoute
 import com.example.mobileschedule.ui.today.TodayRoute
+import com.example.mobileschedule.ui.widget.WidgetSettingsRoute
 
 private enum class Destination(
     val route: String,
@@ -64,6 +65,8 @@ private enum class Destination(
 fun MobileScheduleApp(
     initialCourseId: Long? = null,
     onClearInitialCourseId: () -> Unit = {},
+    initialTab: String? = null,
+    onClearInitialTab: () -> Unit = {},
 ) {
     val navController = rememberNavController()
     val entry by navController.currentBackStackEntryAsState()
@@ -80,6 +83,24 @@ fun MobileScheduleApp(
                     restoreState = true
                 }
             }
+        }
+    }
+    LaunchedEffect(initialTab) {
+        if (initialTab != null) {
+            val targetRoute = when (initialTab) {
+                "today" -> Destination.TODAY.route
+                "schedule" -> Destination.SCHEDULE.route
+                "settings" -> Destination.SETTINGS.route
+                else -> null
+            }
+            if (targetRoute != null && entry?.destination?.route != targetRoute) {
+                navController.navigate(targetRoute) {
+                    popUpTo(navController.graph.findStartDestination().id) { saveState = true }
+                    launchSingleTop = true
+                    restoreState = true
+                }
+            }
+            onClearInitialTab()
         }
     }
     SettingsUpdateHost(settingsViewModel, showMirror, { showMirror = true }, { showMirror = false })
@@ -148,11 +169,15 @@ fun MobileScheduleApp(
                 SettingsRoute(
                     onManageSchedule = { navController.navigate("settings/schedule-management") },
                     onDisplaySettings = { navController.navigate("schedule/display-settings") },
+                    onWidgetSettings = { navController.navigate("settings/widget") },
                     onAbout = { navController.navigate("settings/about") },
                     onChangelog = { navController.navigate("settings/changelog") },
                     onSelectMirror = { showMirror = true },
                     viewModel = settingsViewModel,
                 )
+            }
+            composable("settings/widget") {
+                WidgetSettingsRoute(onBack = { navController.popBackStack() })
             }
             composable("settings/about") {
                 AboutRoute(

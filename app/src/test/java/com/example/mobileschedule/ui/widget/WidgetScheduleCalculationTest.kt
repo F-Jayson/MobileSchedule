@@ -142,6 +142,32 @@ class WidgetScheduleCalculationTest {
     }
 
     @Test
+    fun widgetSchedule_withShowAllCourses_includesPastCoursesWithFinishedFlag() {
+        val monday = LocalDate.of(2026, 8, 31)
+        val betweenClassesTime = LocalTime.of(9, 45) // After Section 2 (ends 09:35)
+
+        val result = ScheduleRules.widgetSchedule(
+            semester = sampleSemester,
+            arrangements = listOf(mathCourse, physicsCourse),
+            today = monday,
+            now = betweenClassesTime,
+            showAllCourses = true,
+        )
+
+        assertTrue(result is WidgetScheduleData.TodayCourses)
+        val todayData = result as WidgetScheduleData.TodayCourses
+        assertEquals(2, todayData.courses.size)
+        // First course was in morning (ends 09:35) -> finished
+        assertEquals(101L, todayData.courses[0].id)
+        assertTrue(todayData.courses[0].isFinished)
+        assertFalse(todayData.courses[0].isOngoing)
+        // Second course is upcoming (starts 10:00) -> not finished
+        assertEquals(102L, todayData.courses[1].id)
+        assertFalse(todayData.courses[1].isFinished)
+        assertFalse(todayData.courses[1].isOngoing)
+    }
+
+    @Test
     fun widgetSchedule_allTodayCoursesEnded_showsTomorrowPreview() {
         val monday = LocalDate.of(2026, 8, 31)
         val afternoonTime = LocalTime.of(12, 0) // After Section 4 (ends 11:35)

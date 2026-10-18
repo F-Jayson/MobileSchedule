@@ -63,7 +63,7 @@ class ScheduleWidgetTest {
     )
 
     @Test
-    fun widgetLayout_todayCourses_rendersCardsAndOngoingBadge() {
+    fun widgetLayout_todayCourses_scrollableListMode_rendersListView() {
         val data = WidgetScheduleData.TodayCourses(
             dateText = "10月15日 周四",
             weekText = "第 7 周",
@@ -83,17 +83,46 @@ class ScheduleWidgetTest {
         val dateView = inflated.findViewById<TextView>(R.id.widget_header_date)
         val weekView = inflated.findViewById<TextView>(R.id.widget_header_week)
         val subtitleView = inflated.findViewById<TextView>(R.id.widget_header_subtitle)
-        val course1Title = inflated.findViewById<TextView>(R.id.widget_course_title_1)
-        val course1Badge = inflated.findViewById<TextView>(R.id.widget_course_badge_1)
-        val course2Title = inflated.findViewById<TextView>(R.id.widget_course_title_2)
 
         assertEquals("10月15日 周四", dateView.text.toString())
         assertEquals("第 7 周", weekView.text.toString())
         assertEquals("正在上课", subtitleView.text.toString())
+
+        assertEquals(View.VISIBLE, inflated.findViewById<View>(R.id.widget_courses_list).visibility)
+        assertEquals(View.GONE, inflated.findViewById<View>(R.id.widget_courses_container).visibility)
+        assertEquals(View.GONE, inflated.findViewById<View>(R.id.widget_empty_container).visibility)
+
+        saveWidgetSnapshot(inflated, "widget-schedule-today-list.png")
+    }
+
+    @Test
+    fun widgetLayout_todayCourses_staticRowsMode_rendersCardsAndOngoingBadge() {
+        val data = WidgetScheduleData.TodayCourses(
+            dateText = "10月15日 周四",
+            weekText = "第 7 周",
+            subtitle = "正在上课",
+            courses = listOf(courseItem1, courseItem2),
+            totalRemainingCount = 2,
+        )
+
+        val options = com.example.mobileschedule.data.preferences.WidgetCustomizationOptions(showAllCourses = false)
+        val views = ScheduleWidgetUpdater.buildRemoteViews(context, data, options)
+        assertNotNull(views)
+        assertEquals(R.layout.widget_schedule_4x2, views.layoutId)
+
+        val container = FrameLayout(context)
+        val inflated = views.apply(context, container)
+        assertNotNull(inflated)
+
+        val course1Title = inflated.findViewById<TextView>(R.id.widget_course_title_1)
+        val course1Badge = inflated.findViewById<TextView>(R.id.widget_course_badge_1)
+        val course2Title = inflated.findViewById<TextView>(R.id.widget_course_title_2)
+
         assertEquals("高等数学", course1Title.text.toString())
         assertEquals("● 正在上课", course1Badge.text.toString())
         assertEquals("大学物理", course2Title.text.toString())
 
+        assertEquals(View.GONE, inflated.findViewById<View>(R.id.widget_courses_list).visibility)
         assertEquals(View.VISIBLE, inflated.findViewById<View>(R.id.widget_courses_container).visibility)
         assertEquals(View.GONE, inflated.findViewById<View>(R.id.widget_empty_container).visibility)
 
@@ -110,7 +139,8 @@ class ScheduleWidgetTest {
             tomorrowCourses = listOf(tomorrowCourseItem),
         )
 
-        val views = ScheduleWidgetUpdater.buildRemoteViews(context, data)
+        val options = com.example.mobileschedule.data.preferences.WidgetCustomizationOptions(showAllCourses = false)
+        val views = ScheduleWidgetUpdater.buildRemoteViews(context, data, options)
         val container = FrameLayout(context)
         val inflated = views.apply(context, container)
 
