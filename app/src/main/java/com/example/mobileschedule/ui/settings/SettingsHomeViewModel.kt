@@ -13,9 +13,11 @@ import com.example.mobileschedule.data.repository.ScheduleManagementService
 import com.example.mobileschedule.data.preferences.AppPreferencesStore
 import com.example.mobileschedule.data.preferences.AppThemeMode
 import android.net.Uri
+import com.example.mobileschedule.data.reminder.CourseReminderNotifier
 import com.example.mobileschedule.data.updater.AppUpdateChecker
 import com.example.mobileschedule.data.updater.AppUpdateDownloader
 import com.example.mobileschedule.data.updater.DownloadSourceStore
+import com.example.mobileschedule.ui.widget.ScheduleWidgetNotifier
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
 import javax.inject.Inject
@@ -113,6 +115,33 @@ class SettingsHomeViewModel @Inject constructor(
         }
     }
 
+    val reminderEnabled: StateFlow<Boolean> = preferences.reminderEnabledFlow
+    val reminderAdvanceMinutes: StateFlow<Int> = preferences.reminderAdvanceMinutesFlow
+
+    fun setReminderEnabled(enabled: Boolean) {
+        viewModelScope.launch {
+            preferenceWrites.withLock {
+                if (withContext(Dispatchers.IO) { preferences.saveReminderEnabled(enabled) }) {
+                    CourseReminderNotifier.notifyDataChanged()
+                } else {
+                    mutableActionError.value = "课前提醒设置保存失败，请重试。"
+                }
+            }
+        }
+    }
+
+    fun setReminderAdvanceMinutes(minutes: Int) {
+        viewModelScope.launch {
+            preferenceWrites.withLock {
+                if (withContext(Dispatchers.IO) { preferences.saveReminderAdvanceMinutes(minutes) }) {
+                    CourseReminderNotifier.notifyDataChanged()
+                } else {
+                    mutableActionError.value = "提前提醒时间保存失败，请重试。"
+                }
+            }
+        }
+    }
+
     fun setAutoUpdate(enabled: Boolean) {
         viewModelScope.launch {
             preferenceWrites.withLock {
@@ -135,11 +164,15 @@ class SettingsHomeViewModel @Inject constructor(
 
     fun clearSemester(semesterId: Long) = manage("清除失败，请重试。") {
         val count = management.clearSemester(semesterId)
+        ScheduleWidgetNotifier.notifyDataChanged()
+        CourseReminderNotifier.notifyDataChanged()
         "已清除 $count 条课程安排"
     }
 
     fun deleteSemester(semesterId: Long) = manage("删除学期失败，请重试。") {
         management.deleteSemester(semesterId)
+        ScheduleWidgetNotifier.notifyDataChanged()
+        CourseReminderNotifier.notifyDataChanged()
         "学期已删除"
     }
 
@@ -183,6 +216,8 @@ class SettingsHomeViewModel @Inject constructor(
         manage(if (overwriteExisting) "覆盖学期失败，请重试。" else "导入新学期失败，请重试。") {
             val result = management.commitImport(preview, overwriteExisting)
             result.getOrThrow()
+            ScheduleWidgetNotifier.notifyDataChanged()
+            CourseReminderNotifier.notifyDataChanged()
             if (overwriteExisting) {
                 "已恢复并覆盖“${preview.displayName}”（共 ${preview.arrangementCount} 条课程）"
             } else {

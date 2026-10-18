@@ -33,6 +33,7 @@ import com.example.mobileschedule.data.model.WidgetScheduleData
 import com.example.mobileschedule.data.model.WeekPosition
 import com.example.mobileschedule.data.model.WeekSchedule
 import com.example.mobileschedule.data.rules.ScheduleRules
+import com.example.mobileschedule.data.reminder.CourseReminderNotifier
 import com.example.mobileschedule.ui.widget.ScheduleWidgetNotifier
 import java.time.LocalDate
 import java.time.LocalTime
@@ -57,7 +58,10 @@ class OfflineScheduleRepository @Inject constructor(private val database: AppDat
 
     override suspend fun commitImport(previewId: String, confirmation: ImportConfirmation): RepoResult<ImportReceipt> {
         val result = imports.commit(previewId, confirmation)
-        if (result is RepoResult.Ok) ScheduleWidgetNotifier.notifyDataChanged()
+        if (result is RepoResult.Ok) {
+            ScheduleWidgetNotifier.notifyDataChanged()
+            CourseReminderNotifier.notifyDataChanged()
+        }
         return result
     }
 
@@ -195,7 +199,10 @@ class OfflineScheduleRepository @Inject constructor(private val database: AppDat
         } catch (_: Exception) {
             RepoResult.Err(DataError(DataErrorCode.STORAGE_WRITE_FAILED))
         }
-        if (result is RepoResult.Ok) ScheduleWidgetNotifier.notifyDataChanged()
+        if (result is RepoResult.Ok) {
+            ScheduleWidgetNotifier.notifyDataChanged()
+            CourseReminderNotifier.notifyDataChanged()
+        }
         return result
     }
 
@@ -236,7 +243,10 @@ class OfflineScheduleRepository @Inject constructor(private val database: AppDat
         } catch (_: Exception) {
             RepoResult.Err(DataError(DataErrorCode.STORAGE_WRITE_FAILED))
         }
-        if (result is RepoResult.Ok) ScheduleWidgetNotifier.notifyDataChanged()
+        if (result is RepoResult.Ok) {
+            ScheduleWidgetNotifier.notifyDataChanged()
+            CourseReminderNotifier.notifyDataChanged()
+        }
         return result
     }
 
@@ -255,7 +265,10 @@ class OfflineScheduleRepository @Inject constructor(private val database: AppDat
         } catch (_: Exception) {
             RepoResult.Err(DataError(DataErrorCode.STORAGE_WRITE_FAILED))
         }
-        if (result is RepoResult.Ok) ScheduleWidgetNotifier.notifyDataChanged()
+        if (result is RepoResult.Ok) {
+            ScheduleWidgetNotifier.notifyDataChanged()
+            CourseReminderNotifier.notifyDataChanged()
+        }
         return result
     }
 
@@ -295,7 +308,10 @@ class OfflineScheduleRepository @Inject constructor(private val database: AppDat
         } catch (_: Exception) {
             RepoResult.Err(DataError(DataErrorCode.STORAGE_WRITE_FAILED))
         }
-        if (result is RepoResult.Ok) ScheduleWidgetNotifier.notifyDataChanged()
+        if (result is RepoResult.Ok) {
+            ScheduleWidgetNotifier.notifyDataChanged()
+            CourseReminderNotifier.notifyDataChanged()
+        }
         return result
     }
 
@@ -335,7 +351,10 @@ class OfflineScheduleRepository @Inject constructor(private val database: AppDat
         } catch (_: Exception) {
             RepoResult.Err(DataError(DataErrorCode.STORAGE_WRITE_FAILED))
         }
-        if (result is RepoResult.Ok) ScheduleWidgetNotifier.notifyDataChanged()
+        if (result is RepoResult.Ok) {
+            ScheduleWidgetNotifier.notifyDataChanged()
+            CourseReminderNotifier.notifyDataChanged()
+        }
         return result
     }
 
@@ -352,7 +371,10 @@ class OfflineScheduleRepository @Inject constructor(private val database: AppDat
         } catch (_: Exception) {
             RepoResult.Err(DataError(DataErrorCode.STORAGE_WRITE_FAILED))
         }
-        if (result is RepoResult.Ok) ScheduleWidgetNotifier.notifyDataChanged()
+        if (result is RepoResult.Ok) {
+            ScheduleWidgetNotifier.notifyDataChanged()
+            CourseReminderNotifier.notifyDataChanged()
+        }
         return result
     }
 

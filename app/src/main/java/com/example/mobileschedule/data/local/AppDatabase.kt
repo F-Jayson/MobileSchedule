@@ -21,9 +21,21 @@ abstract class AppDatabase : RoomDatabase() {
     abstract fun importBatchDao(): ImportBatchDao
 
     companion object {
+        @Volatile
+        private var instance: AppDatabase? = null
+
         fun open(context: Context, name: String = "mobile_schedule.db"): AppDatabase =
             Room.databaseBuilder(context, AppDatabase::class.java, name)
                 .addMigrations(DatabaseMigrations.MIGRATION_1_2)
                 .build()
+
+        /**
+         * Returns a cached database instance for non-DI contexts (boot receiver, reminder scheduler).
+         * Thread-safe double-checked locking ensures a single instance across callers.
+         */
+        fun getDatabase(context: Context): AppDatabase =
+            instance ?: synchronized(this) {
+                instance ?: open(context.applicationContext).also { instance = it }
+            }
     }
 }

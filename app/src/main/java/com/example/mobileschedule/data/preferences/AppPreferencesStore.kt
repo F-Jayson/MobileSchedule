@@ -19,6 +19,8 @@ class AppPreferencesStore(context: Context, preferencesName: String = "app_prefe
         private val _themeModeFlow = MutableStateFlow(AppThemeMode.SYSTEM)
         private val _showWeekendFlow = MutableStateFlow(true)
         private val _firstDayOfWeekFlow = MutableStateFlow(DayOfWeek.MONDAY)
+        private val _reminderEnabledFlow = MutableStateFlow(false)
+        private val _reminderAdvanceMinutesFlow = MutableStateFlow(15)
         @Volatile private var isInitialized = false
     }
 
@@ -27,6 +29,8 @@ class AppPreferencesStore(context: Context, preferencesName: String = "app_prefe
             _themeModeFlow.value = getThemeMode()
             _showWeekendFlow.value = isShowWeekend()
             _firstDayOfWeekFlow.value = getFirstDayOfWeek()
+            _reminderEnabledFlow.value = isReminderEnabled()
+            _reminderAdvanceMinutesFlow.value = getReminderAdvanceMinutes()
             isInitialized = true
         }
     }
@@ -34,6 +38,8 @@ class AppPreferencesStore(context: Context, preferencesName: String = "app_prefe
     val themeModeFlow: StateFlow<AppThemeMode> = _themeModeFlow.asStateFlow()
     val showWeekendFlow: StateFlow<Boolean> = _showWeekendFlow.asStateFlow()
     val firstDayOfWeekFlow: StateFlow<DayOfWeek> = _firstDayOfWeekFlow.asStateFlow()
+    val reminderEnabledFlow: StateFlow<Boolean> = _reminderEnabledFlow.asStateFlow()
+    val reminderAdvanceMinutesFlow: StateFlow<Int> = _reminderAdvanceMinutesFlow.asStateFlow()
 
     fun isQuickImportEnabled(): Boolean = preferences.getBoolean("quick_import", false)
     fun isAutoUpdateEnabled(): Boolean = preferences.getBoolean("auto_check_update", true)
@@ -71,6 +77,25 @@ class AppPreferencesStore(context: Context, preferencesName: String = "app_prefe
         val ok = preferences.edit().putString("app_theme_mode", mode.name).commit()
         if (ok) {
             _themeModeFlow.value = mode
+        }
+        return ok
+    }
+
+    // 3. 课前提醒设置
+    fun isReminderEnabled(): Boolean = preferences.getBoolean("reminder_enabled", false)
+    fun saveReminderEnabled(enabled: Boolean): Boolean {
+        val ok = preferences.edit().putBoolean("reminder_enabled", enabled).commit()
+        if (ok) {
+            _reminderEnabledFlow.value = enabled
+        }
+        return ok
+    }
+
+    fun getReminderAdvanceMinutes(): Int = preferences.getInt("reminder_advance_minutes", 15)
+    fun saveReminderAdvanceMinutes(minutes: Int): Boolean {
+        val ok = preferences.edit().putInt("reminder_advance_minutes", minutes).commit()
+        if (ok) {
+            _reminderAdvanceMinutesFlow.value = minutes
         }
         return ok
     }

@@ -1,5 +1,10 @@
 package com.example.mobileschedule.ui.settings
 
+import android.Manifest
+import android.content.pm.PackageManager
+import android.os.Build
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -8,9 +13,11 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.core.content.ContextCompat
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.mobileschedule.BuildConfig
@@ -33,6 +40,9 @@ fun SettingsRoute(
     val quickImport by viewModel.quickImport.collectAsStateWithLifecycle()
     val autoUpdate by viewModel.autoUpdate.collectAsStateWithLifecycle()
     val themeMode by viewModel.themeMode.collectAsStateWithLifecycle()
+    val reminderEnabled by viewModel.reminderEnabled.collectAsStateWithLifecycle()
+    val reminderAdvanceMinutes by viewModel.reminderAdvanceMinutes.collectAsStateWithLifecycle()
+
     SettingsHomeScreen(
         state = state,
         onManageSchedule = onManageSchedule,
@@ -43,6 +53,10 @@ fun SettingsRoute(
         onSelectMirror = onSelectMirror,
         quickImport = quickImport,
         onQuickImportChange = viewModel::setQuickImport,
+        reminderEnabled = reminderEnabled,
+        onReminderEnabledChange = viewModel::setReminderEnabled,
+        reminderAdvanceMinutes = reminderAdvanceMinutes,
+        onReminderAdvanceMinutesChange = viewModel::setReminderAdvanceMinutes,
         autoUpdate = autoUpdate,
         onAutoUpdateChange = viewModel::setAutoUpdate,
         themeMode = themeMode,
@@ -64,6 +78,10 @@ fun SettingsHomeScreen(
     onSelectMirror: () -> Unit = {},
     quickImport: Boolean = false,
     onQuickImportChange: (Boolean) -> Unit = {},
+    reminderEnabled: Boolean = false,
+    onReminderEnabledChange: (Boolean) -> Unit = {},
+    reminderAdvanceMinutes: Int = 15,
+    onReminderAdvanceMinutesChange: (Int) -> Unit = {},
     autoUpdate: Boolean = true,
     onAutoUpdateChange: (Boolean) -> Unit = {},
     themeMode: AppThemeMode = AppThemeMode.SYSTEM,
@@ -73,11 +91,45 @@ fun SettingsHomeScreen(
     actionError: String? = null,
 ) {
     var showThemeDialog by remember { mutableStateOf(false) }
+    var showReminderDialog by remember { mutableStateOf(false) }
+
+    val context = LocalContext.current
+    val permissionLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestPermission(),
+    ) { isGranted ->
+        if (isGranted) {
+            onReminderEnabledChange(true)
+        } else {
+            onReminderEnabledChange(false)
+        }
+    }
+
+    val onToggleReminder: (Boolean) -> Unit = { enabled ->
+        if (enabled && Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            val hasPermission = ContextCompat.checkSelfPermission(
+                context, Manifest.permission.POST_NOTIFICATIONS,
+            ) == PackageManager.PERMISSION_GRANTED
+            if (hasPermission) {
+                onReminderEnabledChange(true)
+            } else {
+                permissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+            }
+        } else {
+            onReminderEnabledChange(enabled)
+        }
+    }
+
     val activeName = (state as? SettingsHomeUiState.Ready)?.let { ready ->
         ready.semesters.firstOrNull { it.id == ready.activeId }?.displayName
     }
-    LazyColumn(Modifier.fillMaxSize().testTag("settings_page"),
-        contentPadding = PaddingValues(20.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
+
+    LazyColumn(
+        Modifier
+            .fillMaxSize()
+            .testTag("settings_page"),
+        contentPadding = PaddingValues(20.dp),
+        verticalArrangement = Arrangement.spacedBy(16.dp),
+    ) {
         item { Text("设置", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold) }
         item {
             SettingsGroup("课表管理") {
@@ -95,8 +147,29 @@ fun SettingsHomeScreen(
         item {
             SettingsGroup("偏好设置") {
                 SettingsEntry("课表显示", "课程地点、教师与显示时间", "settings_display_settings", onDisplaySettings)
-                SettingsToggle("快速导入", "自动选择当前学年和学期，解析完成后导入并返回课表；同来源学期的课程将被替换。",
-                    quickImport, onQuickImportChange, "settings_quick_import")
+                SettingsToggle(
+                    "快速导入",
+                    "自动选择当前学年和学期，解析完成后导入并返回课表；同来源学期的课程将被替换。",
+                    quickImport,
+                    onQuickImportChange,
+                    "settings_quick_import",
+                )
+                SettingsToggle(
+                    "课前提醒",
+                    "在课程开始前发送通知提醒，避免遗忘上课",
+                    reminderEnabled,
+                    onToggleReminder,
+                    "settings_reminder_enabled",
+                )
+                if (reminderEnabled) {
+                    SettingsEntry(
+                        "提前提醒时间",
+                        "提前 ${reminderAdvanceMinutes} 分钟提醒",
+                        "settings_reminder_advance",
+                    ) {
+                        showReminderDialog = true
+                    }
+                }
             }
         }
         item {
@@ -125,6 +198,130 @@ fun SettingsHomeScreen(
             onDismiss = { showThemeDialog = false },
         )
     }
+
+    if (showReminderDialog) {
+        ReminderAdvanceDialog(
+            currentMinutes = reminderAdvanceMinutes,
+            onSelect = {
+                onReminderAdvanceMinutesChange(it)
+                showReminderDialog = false
+            },
+            onDismiss = { showReminderDialog = false },
+        )
+    }
+}
+
+@Composable
+private fun ReminderAdvanceDialog(
+    currentMinutes: Int,
+    onSelect: (Int) -> Unit,
+    onDismiss: () -> Unit,
+) {
+    val presets = listOf(5, 10, 15, 20, 30, 45, 60)
+    var isCustom by remember { mutableStateOf(currentMinutes !in presets) }
+    var selectedMinutes by remember { mutableIntStateOf(currentMinutes) }
+    var customText by remember { mutableStateOf(if (currentMinutes !in presets) currentMinutes.toString() else "") }
+    var customError by remember { mutableStateOf(false) }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        modifier = Modifier.testTag("reminder_advance_dialog"),
+        title = { Text("提前提醒时间", fontWeight = FontWeight.Bold) },
+        text = {
+            Column(Modifier.fillMaxWidth()) {
+                presets.forEach { minutes ->
+                    Row(
+                        Modifier
+                            .fillMaxWidth()
+                            .clickable {
+                                isCustom = false
+                                selectedMinutes = minutes
+                            }
+                            .padding(vertical = 6.dp, horizontal = 4.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        RadioButton(
+                            selected = (!isCustom && selectedMinutes == minutes),
+                            onClick = {
+                                isCustom = false
+                                selectedMinutes = minutes
+                            },
+                            modifier = Modifier.testTag("reminder_preset_$minutes"),
+                        )
+                        Spacer(Modifier.width(8.dp))
+                        Text("提前 $minutes 分钟", style = MaterialTheme.typography.bodyLarge)
+                    }
+                }
+
+                Row(
+                    Modifier
+                        .fillMaxWidth()
+                        .clickable { isCustom = true }
+                        .padding(vertical = 6.dp, horizontal = 4.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    RadioButton(
+                        selected = isCustom,
+                        onClick = { isCustom = true },
+                        modifier = Modifier.testTag("reminder_preset_custom"),
+                    )
+                    Spacer(Modifier.width(8.dp))
+                    Text("自定义分钟数", style = MaterialTheme.typography.bodyLarge)
+                }
+
+                if (isCustom) {
+                    OutlinedTextField(
+                        value = customText,
+                        onValueChange = { input ->
+                            val filtered = input.filter { it.isDigit() }.take(3)
+                            customText = filtered
+                            val num = filtered.toIntOrNull()
+                            if (num != null && num in 1..180) {
+                                customError = false
+                                selectedMinutes = num
+                            } else {
+                                customError = true
+                            }
+                        },
+                        label = { Text("提前分钟数 (1-180)") },
+                        singleLine = true,
+                        isError = customError,
+                        supportingText = if (customError) {
+                            { Text("请输入 1 到 180 之间的整数") }
+                        } else null,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 8.dp, vertical = 4.dp)
+                            .testTag("reminder_custom_input"),
+                    )
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(
+                onClick = {
+                    if (isCustom) {
+                        val num = customText.toIntOrNull()
+                        if (num != null && num in 1..180) {
+                            onSelect(num)
+                        } else {
+                            customError = true
+                        }
+                    } else {
+                        onSelect(selectedMinutes)
+                    }
+                },
+                modifier = Modifier.testTag("reminder_confirm_btn"),
+            ) {
+                Text("确定")
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text("取消")
+            }
+        },
+    )
 }
 
 @Composable
@@ -174,8 +371,11 @@ private fun ThemeSelectionDialog(
 internal fun SettingsGroup(title: String, content: @Composable ColumnScope.() -> Unit) {
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         Text(title, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-        Surface(shape = RoundedCornerShape(20.dp), color = MaterialTheme.colorScheme.surfaceContainerLow,
-            modifier = Modifier.fillMaxWidth()) {
+        Surface(
+            shape = RoundedCornerShape(20.dp),
+            color = MaterialTheme.colorScheme.surfaceContainerLow,
+            modifier = Modifier.fillMaxWidth(),
+        ) {
             Column(Modifier.padding(8.dp), content = content)
         }
     }
@@ -183,8 +383,14 @@ internal fun SettingsGroup(title: String, content: @Composable ColumnScope.() ->
 
 @Composable
 private fun SettingsEntry(title: String, description: String, tag: String, onClick: () -> Unit) {
-    Surface(onClick = onClick, color = MaterialTheme.colorScheme.surfaceContainerLow,
-        shape = RoundedCornerShape(12.dp), modifier = Modifier.fillMaxWidth().testTag(tag)) {
+    Surface(
+        onClick = onClick,
+        color = MaterialTheme.colorScheme.surfaceContainerLow,
+        shape = RoundedCornerShape(12.dp),
+        modifier = Modifier
+            .fillMaxWidth()
+            .testTag(tag),
+    ) {
         Row(Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
             Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                 Text(title, fontWeight = FontWeight.Medium)

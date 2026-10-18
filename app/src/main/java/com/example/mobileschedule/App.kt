@@ -1,6 +1,8 @@
 package com.example.mobileschedule
 
 import android.app.Application
+import com.example.mobileschedule.data.reminder.CourseReminderNotifier
+import com.example.mobileschedule.data.reminder.CourseReminderReceiver
 import com.example.mobileschedule.ui.theme.CourseColorStore
 import com.example.mobileschedule.ui.widget.ScheduleWidgetNotifier
 import com.example.mobileschedule.ui.widget.ScheduleWidgetWorker
@@ -13,5 +15,7 @@ class App : Application() {
         CourseColorStore.init(this)
         ScheduleWidgetNotifier.init(this)
         ScheduleWidgetWorker.enqueuePeriodicWork(this)
+        CourseReminderReceiver.ensureChannel(this)
+        CourseReminderNotifier.init(this)
     }
 }
