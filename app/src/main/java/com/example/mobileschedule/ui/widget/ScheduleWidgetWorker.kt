@@ -23,6 +23,7 @@ class ScheduleWidgetWorker(
     override suspend fun doWork(): Result = withContext(Dispatchers.IO) {
         try {
             ScheduleWidgetUpdater.updateAllWidgets(applicationContext)
+            com.example.mobileschedule.data.notification.OngoingScheduleNotificationManager.notifyDataChanged()
             Result.success()
         } catch (_: Exception) {
             Result.retry()

@@ -32,6 +32,7 @@ object CourseReminderNotifier {
         scope.launch {
             rescheduleFromDatabase(context)
         }
+        com.example.mobileschedule.data.notification.OngoingScheduleNotificationManager.notifyDataChanged()
     }
 
     /**

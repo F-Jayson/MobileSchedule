@@ -42,6 +42,7 @@ fun SettingsRoute(
     val themeMode by viewModel.themeMode.collectAsStateWithLifecycle()
     val reminderEnabled by viewModel.reminderEnabled.collectAsStateWithLifecycle()
     val reminderAdvanceMinutes by viewModel.reminderAdvanceMinutes.collectAsStateWithLifecycle()
+    val ongoingNotificationEnabled by viewModel.ongoingNotificationEnabled.collectAsStateWithLifecycle()
 
     SettingsHomeScreen(
         state = state,
@@ -57,6 +58,8 @@ fun SettingsRoute(
         onReminderEnabledChange = viewModel::setReminderEnabled,
         reminderAdvanceMinutes = reminderAdvanceMinutes,
         onReminderAdvanceMinutesChange = viewModel::setReminderAdvanceMinutes,
+        ongoingNotificationEnabled = ongoingNotificationEnabled,
+        onOngoingNotificationEnabledChange = viewModel::setOngoingNotificationEnabled,
         autoUpdate = autoUpdate,
         onAutoUpdateChange = viewModel::setAutoUpdate,
         themeMode = themeMode,
@@ -82,6 +85,8 @@ fun SettingsHomeScreen(
     onReminderEnabledChange: (Boolean) -> Unit = {},
     reminderAdvanceMinutes: Int = 15,
     onReminderAdvanceMinutesChange: (Int) -> Unit = {},
+    ongoingNotificationEnabled: Boolean = false,
+    onOngoingNotificationEnabledChange: (Boolean) -> Unit = {},
     autoUpdate: Boolean = true,
     onAutoUpdateChange: (Boolean) -> Unit = {},
     themeMode: AppThemeMode = AppThemeMode.SYSTEM,
@@ -116,6 +121,27 @@ fun SettingsHomeScreen(
             }
         } else {
             onReminderEnabledChange(enabled)
+        }
+    }
+
+    val ongoingPermissionLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestPermission(),
+    ) { isGranted ->
+        onOngoingNotificationEnabledChange(isGranted)
+    }
+
+    val onToggleOngoingNotification: (Boolean) -> Unit = { enabled ->
+        if (enabled && Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            val hasPermission = ContextCompat.checkSelfPermission(
+                context, Manifest.permission.POST_NOTIFICATIONS,
+            ) == PackageManager.PERMISSION_GRANTED
+            if (hasPermission) {
+                onOngoingNotificationEnabledChange(true)
+            } else {
+                ongoingPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+            }
+        } else {
+            onOngoingNotificationEnabledChange(enabled)
         }
     }
 
@@ -170,6 +196,13 @@ fun SettingsHomeScreen(
                         showReminderDialog = true
                     }
                 }
+                SettingsToggle(
+                    "通知栏常驻上课卡片",
+                    "当天有课时在通知栏常驻显示当前与下一节课程，下课或结课后自动撤销",
+                    ongoingNotificationEnabled,
+                    onToggleOngoingNotification,
+                    "settings_ongoing_notification_enabled",
+                )
             }
         }
         item {

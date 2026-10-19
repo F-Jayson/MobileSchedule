@@ -144,6 +144,24 @@ class SettingsHomeViewModel @Inject constructor(
         }
     }
 
+    val ongoingNotificationEnabled: StateFlow<Boolean> = preferences.ongoingNotificationEnabledFlow
+
+    fun setOngoingNotificationEnabled(enabled: Boolean) {
+        viewModelScope.launch {
+            preferenceWrites.withLock {
+                if (withContext(Dispatchers.IO) { preferences.saveOngoingNotificationEnabled(enabled) }) {
+                    if (!enabled) {
+                        com.example.mobileschedule.data.notification.OngoingScheduleNotificationManager.cancelNotification(context)
+                    } else {
+                        com.example.mobileschedule.data.notification.OngoingScheduleNotificationManager.notifyDataChanged()
+                    }
+                } else {
+                    mutableActionError.value = "常驻通知卡片设置保存失败，请重试。"
+                }
+            }
+        }
+    }
+
     fun setAutoUpdate(enabled: Boolean) {
         viewModelScope.launch {
             preferenceWrites.withLock {

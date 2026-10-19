@@ -23,6 +23,7 @@ class AppPreferencesStore(context: Context, preferencesName: String = "app_prefe
         private val _reminderEnabledFlow = MutableStateFlow(false)
         private val _reminderAdvanceMinutesFlow = MutableStateFlow(15)
         private val _showNonCurrentWeekCoursesFlow = MutableStateFlow(false)
+        private val _ongoingNotificationEnabledFlow = MutableStateFlow(false)
         @Volatile private var isInitialized = false
     }
 
@@ -34,6 +35,7 @@ class AppPreferencesStore(context: Context, preferencesName: String = "app_prefe
             _reminderEnabledFlow.value = isReminderEnabled()
             _reminderAdvanceMinutesFlow.value = getReminderAdvanceMinutes()
             _showNonCurrentWeekCoursesFlow.value = isShowNonCurrentWeekCourses()
+            _ongoingNotificationEnabledFlow.value = isOngoingNotificationEnabled()
             isInitialized = true
         }
     }
@@ -45,6 +47,7 @@ class AppPreferencesStore(context: Context, preferencesName: String = "app_prefe
     val reminderAdvanceMinutesFlow: StateFlow<Int> = _reminderAdvanceMinutesFlow.asStateFlow()
     val showNonCurrentWeekCourses: Flow<Boolean> = _showNonCurrentWeekCoursesFlow.asStateFlow()
     val showNonCurrentWeekCoursesFlow: StateFlow<Boolean> = _showNonCurrentWeekCoursesFlow.asStateFlow()
+    val ongoingNotificationEnabledFlow: StateFlow<Boolean> = _ongoingNotificationEnabledFlow.asStateFlow()
 
     fun isQuickImportEnabled(): Boolean = preferences.getBoolean("quick_import", false)
     fun isAutoUpdateEnabled(): Boolean = preferences.getBoolean("auto_check_update", true)
@@ -111,6 +114,16 @@ class AppPreferencesStore(context: Context, preferencesName: String = "app_prefe
         val ok = preferences.edit().putBoolean("show_non_current_week_courses", show).commit()
         if (ok) {
             _showNonCurrentWeekCoursesFlow.value = show
+        }
+        return ok
+    }
+
+    // 5. 通知栏常驻上课胶囊卡片设置
+    fun isOngoingNotificationEnabled(): Boolean = preferences.getBoolean("ongoing_notification_enabled", false)
+    fun saveOngoingNotificationEnabled(enabled: Boolean): Boolean {
+        val ok = preferences.edit().putBoolean("ongoing_notification_enabled", enabled).commit()
+        if (ok) {
+            _ongoingNotificationEnabledFlow.value = enabled
         }
         return ok
     }
