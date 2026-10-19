@@ -43,6 +43,7 @@ fun SettingsRoute(
     val reminderEnabled by viewModel.reminderEnabled.collectAsStateWithLifecycle()
     val reminderAdvanceMinutes by viewModel.reminderAdvanceMinutes.collectAsStateWithLifecycle()
     val ongoingNotificationEnabled by viewModel.ongoingNotificationEnabled.collectAsStateWithLifecycle()
+    val classDndEnabled by viewModel.classDndEnabled.collectAsStateWithLifecycle()
 
     SettingsHomeScreen(
         state = state,
@@ -60,6 +61,8 @@ fun SettingsRoute(
         onReminderAdvanceMinutesChange = viewModel::setReminderAdvanceMinutes,
         ongoingNotificationEnabled = ongoingNotificationEnabled,
         onOngoingNotificationEnabledChange = viewModel::setOngoingNotificationEnabled,
+        classDndEnabled = classDndEnabled,
+        onClassDndEnabledChange = viewModel::setClassDndEnabled,
         autoUpdate = autoUpdate,
         onAutoUpdateChange = viewModel::setAutoUpdate,
         themeMode = themeMode,
@@ -87,6 +90,8 @@ fun SettingsHomeScreen(
     onReminderAdvanceMinutesChange: (Int) -> Unit = {},
     ongoingNotificationEnabled: Boolean = false,
     onOngoingNotificationEnabledChange: (Boolean) -> Unit = {},
+    classDndEnabled: Boolean = false,
+    onClassDndEnabledChange: (Boolean) -> Unit = {},
     autoUpdate: Boolean = true,
     onAutoUpdateChange: (Boolean) -> Unit = {},
     themeMode: AppThemeMode = AppThemeMode.SYSTEM,
@@ -142,6 +147,21 @@ fun SettingsHomeScreen(
             }
         } else {
             onOngoingNotificationEnabledChange(enabled)
+        }
+    }
+
+    var showDndPermissionDialog by remember { mutableStateOf(false) }
+
+    val onToggleClassDnd: (Boolean) -> Unit = { enabled ->
+        if (enabled) {
+            val hasPolicyAccess = com.example.mobileschedule.data.dnd.ClassDndManager.isNotificationPolicyAccessGranted(context)
+            if (hasPolicyAccess) {
+                onClassDndEnabledChange(true)
+            } else {
+                showDndPermissionDialog = true
+            }
+        } else {
+            onClassDndEnabledChange(false)
         }
     }
 
@@ -203,6 +223,13 @@ fun SettingsHomeScreen(
                     onToggleOngoingNotification,
                     "settings_ongoing_notification_enabled",
                 )
+                SettingsToggle(
+                    "上课自动静音",
+                    "上课时自动开启免打扰/静音，下课后自动恢复原始情景模式",
+                    classDndEnabled,
+                    onToggleClassDnd,
+                    "settings_class_dnd_enabled",
+                )
             }
         }
         item {
@@ -240,6 +267,34 @@ fun SettingsHomeScreen(
                 showReminderDialog = false
             },
             onDismiss = { showReminderDialog = false },
+        )
+    }
+
+    if (showDndPermissionDialog) {
+        AlertDialog(
+            onDismissRequest = { showDndPermissionDialog = false },
+            title = { Text("需要免打扰访问权限") },
+            text = { Text("开启上课自动静音需要允许应用修改免打扰与情景模式策略。点击确定前往系统设置授权。") },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        showDndPermissionDialog = false
+                        com.example.mobileschedule.data.dnd.ClassDndManager.openPolicyAccessSettings(context)
+                    },
+                    modifier = Modifier.testTag("dnd_permission_confirm"),
+                ) {
+                    Text("前往设置")
+                }
+            },
+            dismissButton = {
+                TextButton(
+                    onClick = { showDndPermissionDialog = false },
+                    modifier = Modifier.testTag("dnd_permission_dismiss"),
+                ) {
+                    Text("取消")
+                }
+            },
+            modifier = Modifier.testTag("dnd_permission_dialog"),
         )
     }
 }

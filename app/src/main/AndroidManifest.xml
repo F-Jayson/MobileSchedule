@@ -7,6 +7,7 @@
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
     <uses-permission android:name="android.permission.READ_CALENDAR" />
     <uses-permission android:name="android.permission.WRITE_CALENDAR" />
+    <uses-permission android:name="android.permission.ACCESS_NOTIFICATION_POLICY" />
     <application
         android:name=".App"
         android:allowBackup="false"
@@ -64,6 +65,19 @@
             </intent-filter>
             <intent-filter>
                 <action android:name="com.example.mobileschedule.action.SHOW_COURSE_REMINDER" />
+            </intent-filter>
+        </receiver>
+
+        <receiver
+            android:name=".data.dnd.ClassDndReceiver"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.BOOT_COMPLETED" />
+                <action android:name="android.app.action.SCHEDULE_EXACT_ALARM_PERMISSION_STATE_CHANGED" />
+            </intent-filter>
+            <intent-filter>
+                <action android:name="com.example.mobileschedule.action.ENTER_CLASS_DND" />
+                <action android:name="com.example.mobileschedule.action.EXIT_CLASS_DND" />
             </intent-filter>
         </receiver>
     </application>

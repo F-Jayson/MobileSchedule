@@ -33,6 +33,7 @@ object CourseReminderNotifier {
             rescheduleFromDatabase(context)
         }
         com.example.mobileschedule.data.notification.OngoingScheduleNotificationManager.notifyDataChanged()
+        com.example.mobileschedule.data.dnd.ClassDndManager.notifyDataChanged()
     }
 
     /**

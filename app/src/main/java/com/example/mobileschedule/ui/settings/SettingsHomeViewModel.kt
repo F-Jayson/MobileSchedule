@@ -162,6 +162,24 @@ class SettingsHomeViewModel @Inject constructor(
         }
     }
 
+    val classDndEnabled: StateFlow<Boolean> = preferences.classDndEnabledFlow
+
+    fun setClassDndEnabled(enabled: Boolean) {
+        viewModelScope.launch {
+            preferenceWrites.withLock {
+                if (withContext(Dispatchers.IO) { preferences.saveClassDndEnabled(enabled) }) {
+                    if (!enabled) {
+                        com.example.mobileschedule.data.dnd.ClassDndManager.onSettingDisabled(context)
+                    } else {
+                        com.example.mobileschedule.data.dnd.ClassDndManager.rescheduleFromDatabase(context)
+                    }
+                } else {
+                    mutableActionError.value = "上课自动免打扰设置保存失败，请重试。"
+                }
+            }
+        }
+    }
+
     fun setAutoUpdate(enabled: Boolean) {
         viewModelScope.launch {
             preferenceWrites.withLock {

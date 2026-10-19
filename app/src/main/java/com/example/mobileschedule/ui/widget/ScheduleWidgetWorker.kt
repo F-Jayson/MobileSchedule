@@ -24,6 +24,7 @@ class ScheduleWidgetWorker(
         try {
             ScheduleWidgetUpdater.updateAllWidgets(applicationContext)
             com.example.mobileschedule.data.notification.OngoingScheduleNotificationManager.notifyDataChanged()
+            com.example.mobileschedule.data.dnd.ClassDndManager.notifyDataChanged()
             Result.success()
         } catch (_: Exception) {
             Result.retry()

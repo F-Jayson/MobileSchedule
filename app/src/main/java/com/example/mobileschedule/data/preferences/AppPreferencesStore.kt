@@ -24,6 +24,7 @@ class AppPreferencesStore(context: Context, preferencesName: String = "app_prefe
         private val _reminderAdvanceMinutesFlow = MutableStateFlow(15)
         private val _showNonCurrentWeekCoursesFlow = MutableStateFlow(false)
         private val _ongoingNotificationEnabledFlow = MutableStateFlow(false)
+        private val _classDndEnabledFlow = MutableStateFlow(false)
         @Volatile private var isInitialized = false
     }
 
@@ -36,6 +37,7 @@ class AppPreferencesStore(context: Context, preferencesName: String = "app_prefe
             _reminderAdvanceMinutesFlow.value = getReminderAdvanceMinutes()
             _showNonCurrentWeekCoursesFlow.value = isShowNonCurrentWeekCourses()
             _ongoingNotificationEnabledFlow.value = isOngoingNotificationEnabled()
+            _classDndEnabledFlow.value = isClassDndEnabled()
             isInitialized = true
         }
     }
@@ -48,6 +50,7 @@ class AppPreferencesStore(context: Context, preferencesName: String = "app_prefe
     val showNonCurrentWeekCourses: Flow<Boolean> = _showNonCurrentWeekCoursesFlow.asStateFlow()
     val showNonCurrentWeekCoursesFlow: StateFlow<Boolean> = _showNonCurrentWeekCoursesFlow.asStateFlow()
     val ongoingNotificationEnabledFlow: StateFlow<Boolean> = _ongoingNotificationEnabledFlow.asStateFlow()
+    val classDndEnabledFlow: StateFlow<Boolean> = _classDndEnabledFlow.asStateFlow()
 
     fun isQuickImportEnabled(): Boolean = preferences.getBoolean("quick_import", false)
     fun isAutoUpdateEnabled(): Boolean = preferences.getBoolean("auto_check_update", true)
@@ -124,6 +127,16 @@ class AppPreferencesStore(context: Context, preferencesName: String = "app_prefe
         val ok = preferences.edit().putBoolean("ongoing_notification_enabled", enabled).commit()
         if (ok) {
             _ongoingNotificationEnabledFlow.value = enabled
+        }
+        return ok
+    }
+
+    // 6. 上课自动静音/免打扰设置
+    fun isClassDndEnabled(): Boolean = preferences.getBoolean("class_dnd_enabled", false)
+    fun saveClassDndEnabled(enabled: Boolean): Boolean {
+        val ok = preferences.edit().putBoolean("class_dnd_enabled", enabled).commit()
+        if (ok) {
+            _classDndEnabledFlow.value = enabled
         }
         return ok
     }

@@ -19,5 +19,6 @@ class App : Application() {
         CourseReminderReceiver.ensureChannel(this)
         CourseReminderNotifier.init(this)
         OngoingScheduleNotificationManager.init(this)
+        com.example.mobileschedule.data.dnd.ClassDndManager.init(this)
     }
 }
