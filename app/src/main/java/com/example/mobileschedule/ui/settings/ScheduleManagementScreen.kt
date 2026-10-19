@@ -18,6 +18,9 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.foundation.selection.selectable
+import android.Manifest
+import androidx.compose.ui.platform.LocalContext
+import com.example.mobileschedule.data.calendar.SystemCalendarSyncManager
 import com.example.mobileschedule.data.model.Semester
 import com.example.mobileschedule.data.model.SemesterImportPreview
 
@@ -40,6 +43,35 @@ fun ScheduleManagementRoute(
         exportSemesterId = null
         if (uri != null && semesterId != null) viewModel.exportSemester(semesterId, uri)
     }
+    var exportIcsSemesterId by rememberSaveable { mutableStateOf<Long?>(null) }
+    val icsExporter = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("text/calendar")) { uri ->
+        val semesterId = exportIcsSemesterId
+        exportIcsSemesterId = null
+        if (uri != null && semesterId != null) viewModel.exportSemesterIcs(semesterId, uri)
+    }
+    val context = LocalContext.current
+    var pendingSyncSemesterId by rememberSaveable { mutableStateOf<Long?>(null) }
+    var pendingClearCalendar by rememberSaveable { mutableStateOf(false) }
+
+    val calendarPermissionLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestMultiplePermissions(),
+    ) { permissions ->
+        val granted = permissions[Manifest.permission.READ_CALENDAR] == true &&
+            permissions[Manifest.permission.WRITE_CALENDAR] == true
+        val syncId = pendingSyncSemesterId
+        val doClear = pendingClearCalendar
+        pendingSyncSemesterId = null
+        pendingClearCalendar = false
+
+        if (granted) {
+            if (syncId != null) {
+                viewModel.syncSemesterToSystemCalendar(syncId)
+            } else if (doClear) {
+                viewModel.clearSystemCalendar()
+            }
+        }
+    }
+
     val importer = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
         if (uri != null) viewModel.loadSemesterJsonBackup(uri)
     }
@@ -55,6 +87,36 @@ fun ScheduleManagementRoute(
         onExport = { id ->
             exportSemesterId = id
             exporter.launch("课程表-$id.json")
+        },
+        onExportIcs = { id ->
+            exportIcsSemesterId = id
+            icsExporter.launch("福建师大课表-$id.ics")
+        },
+        onSyncCalendar = { id ->
+            if (SystemCalendarSyncManager.hasPermissions(context)) {
+                viewModel.syncSemesterToSystemCalendar(id)
+            } else {
+                pendingSyncSemesterId = id
+                calendarPermissionLauncher.launch(
+                    arrayOf(
+                        Manifest.permission.READ_CALENDAR,
+                        Manifest.permission.WRITE_CALENDAR,
+                    ),
+                )
+            }
+        },
+        onClearCalendar = {
+            if (SystemCalendarSyncManager.hasPermissions(context)) {
+                viewModel.clearSystemCalendar()
+            } else {
+                pendingClearCalendar = true
+                calendarPermissionLauncher.launch(
+                    arrayOf(
+                        Manifest.permission.READ_CALENDAR,
+                        Manifest.permission.WRITE_CALENDAR,
+                    ),
+                )
+            }
         },
         busy = busy,
         actionError = error,
@@ -78,6 +140,9 @@ fun ScheduleManagementScreen(
     onImportJson: () -> Unit = {},
     onClear: (Long) -> Unit = {},
     onExport: (Long) -> Unit = {},
+    onExportIcs: (Long) -> Unit = {},
+    onSyncCalendar: (Long) -> Unit = {},
+    onClearCalendar: () -> Unit = {},
     busy: Boolean = false,
     actionError: String? = null,
     actionMessage: String? = null,
@@ -251,6 +316,31 @@ fun ScheduleManagementScreen(
                     }
                 }
             }
+            item {
+                Surface(
+                    shape = RoundedCornerShape(14.dp),
+                    color = MaterialTheme.colorScheme.surfaceContainer,
+                    modifier = Modifier.fillMaxWidth().testTag("management_calendar_card"),
+                ) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Column(modifier = Modifier.weight(1f).padding(end = 8.dp)) {
+                            Text("系统本地日历", fontWeight = FontWeight.SemiBold, style = MaterialTheme.typography.titleSmall)
+                            Text("可将学期课表写入系统自带日历，方便在手机负一屏与智能手表手环中查看", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        }
+                        OutlinedButton(
+                            onClick = onClearCalendar,
+                            enabled = !busy,
+                            modifier = Modifier.testTag("management_clear_system_calendar"),
+                        ) {
+                            Text("移除系统课表")
+                        }
+                    }
+                }
+            }
             if (busy) item { Row(verticalAlignment = Alignment.CenterVertically) {
                 CircularProgressIndicator(Modifier.size(24.dp))
                 Text("正在处理课表…", Modifier.padding(start = 12.dp))
@@ -280,10 +370,36 @@ fun ScheduleManagementScreen(
                                         modifier = Modifier.testTag("settings_activate_${semester.id}")) { Text("设为当前") }
                                 }
                                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                    OutlinedButton(onClick = { onExport(semester.id) }, enabled = !busy,
-                                        modifier = Modifier.weight(1f).testTag("management_export_${semester.id}")) { Text("导出 JSON") }
-                                    OutlinedButton(onClick = { clearing = semester }, enabled = !busy,
-                                        modifier = Modifier.weight(1f).testTag("management_clear_${semester.id}")) { Text("清除课表") }
+                                    OutlinedButton(
+                                        onClick = { onExport(semester.id) },
+                                        enabled = !busy,
+                                        modifier = Modifier.weight(1f).testTag("management_export_${semester.id}"),
+                                    ) {
+                                        Text("导出 JSON")
+                                    }
+                                    OutlinedButton(
+                                        onClick = { onExportIcs(semester.id) },
+                                        enabled = !busy,
+                                        modifier = Modifier.weight(1f).testTag("management_export_ics_${semester.id}"),
+                                    ) {
+                                        Text("导出 .ics")
+                                    }
+                                }
+                                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                    FilledTonalButton(
+                                        onClick = { onSyncCalendar(semester.id) },
+                                        enabled = !busy,
+                                        modifier = Modifier.weight(1f).testTag("management_sync_calendar_${semester.id}"),
+                                    ) {
+                                        Text("同步系统日历")
+                                    }
+                                    OutlinedButton(
+                                        onClick = { clearing = semester },
+                                        enabled = !busy,
+                                        modifier = Modifier.weight(1f).testTag("management_clear_${semester.id}"),
+                                    ) {
+                                        Text("清除课表")
+                                    }
                                 }
                                 TextButton(onClick = { deleting = semester }, enabled = !busy,
                                     modifier = Modifier.align(Alignment.End).testTag("management_delete_${semester.id}"),

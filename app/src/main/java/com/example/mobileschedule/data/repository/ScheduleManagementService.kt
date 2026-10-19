@@ -3,6 +3,8 @@ package com.example.mobileschedule.data.repository
 import android.content.Context
 import android.net.Uri
 import androidx.room.withTransaction
+import com.example.mobileschedule.data.calendar.CalendarEventItem
+import com.example.mobileschedule.data.calendar.IcsCalendarExporter
 import com.example.mobileschedule.data.local.AppDatabase
 import com.example.mobileschedule.data.local.entity.*
 import com.example.mobileschedule.data.model.*
@@ -113,6 +115,24 @@ class ScheduleManagementService private constructor(
                 }
             }
             Json { prettyPrint = true }.encodeToString(JsonObject.serializer(), snapshot)
+        }
+    }
+
+    suspend fun exportSemesterIcs(semesterId: Long, schoolName: String = "福建师范大学"): String {
+        val db = checkNotNull(database) { "Database is required for exportSemesterIcs" }
+        return db.withTransaction {
+            val semester = requireNotNull(db.semesterDao().getSemester(semesterId)).toModel()
+            val courses = db.courseDao().getSemesterCourses(semesterId).map { it.toArrangement() }
+            IcsCalendarExporter.generateIcs(semester, courses, schoolName)
+        }
+    }
+
+    suspend fun getSemesterCalendarEvents(semesterId: Long, schoolName: String = "福建师范大学"): List<CalendarEventItem> {
+        val db = checkNotNull(database) { "Database is required for getSemesterCalendarEvents" }
+        return db.withTransaction {
+            val semester = requireNotNull(db.semesterDao().getSemester(semesterId)).toModel()
+            val courses = db.courseDao().getSemesterCourses(semesterId).map { it.toArrangement() }
+            IcsCalendarExporter.buildCalendarEvents(semester, courses, schoolName)
         }
     }
 

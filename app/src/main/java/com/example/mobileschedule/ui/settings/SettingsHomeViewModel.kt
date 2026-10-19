@@ -17,6 +17,7 @@ import com.example.mobileschedule.data.reminder.CourseReminderNotifier
 import com.example.mobileschedule.data.updater.AppUpdateChecker
 import com.example.mobileschedule.data.updater.AppUpdateDownloader
 import com.example.mobileschedule.data.updater.DownloadSourceStore
+import com.example.mobileschedule.data.calendar.SystemCalendarSyncManager
 import com.example.mobileschedule.ui.widget.ScheduleWidgetNotifier
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
@@ -47,6 +48,7 @@ class SettingsHomeViewModel @Inject constructor(
     private val repository: ScheduleRepository,
     @param:ApplicationContext private val context: Context,
     private val management: ScheduleManagementService,
+    private val calendarSyncManager: SystemCalendarSyncManager = SystemCalendarSyncManager(context),
 ) : ViewModel() {
     val state: StateFlow<SettingsHomeUiState> = combine(
         repository.observeSemesters(), repository.observeActiveSemester(),
@@ -182,6 +184,37 @@ class SettingsHomeViewModel @Inject constructor(
             it.write(snapshot)
         }
         "课表已导出"
+    }
+
+    fun exportSemesterIcs(semesterId: Long, uri: Uri) = manage("导出日历文件失败，请检查保存位置后重试。") {
+        val icsText = management.exportSemesterIcs(semesterId)
+        requireNotNull(context.contentResolver.openOutputStream(uri, "wt")).bufferedWriter(Charsets.UTF_8).use {
+            it.write(icsText)
+        }
+        "ICS 日历文件已成功导出"
+    }
+
+    fun syncSemesterToSystemCalendar(semesterId: Long) = manage("同步至系统日历失败，请重试。") {
+        val events = management.getSemesterCalendarEvents(semesterId)
+        if (events.isEmpty()) {
+            "该学期暂无课程安排，无需同步"
+        } else {
+            val result = calendarSyncManager.syncEvents(events)
+            if (result.success) {
+                result.message
+            } else {
+                throw IllegalStateException(result.message)
+            }
+        }
+    }
+
+    fun clearSystemCalendar() = manage("移除系统日历课表失败，请重试。") {
+        val result = calendarSyncManager.clearCalendar()
+        if (result.success) {
+            result.message
+        } else {
+            throw IllegalStateException(result.message)
+        }
     }
 
     fun loadSemesterJsonBackup(uri: Uri) {
