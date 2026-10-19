@@ -2,6 +2,7 @@ package com.example.mobileschedule.data.preferences
 
 import android.content.Context
 import java.time.DayOfWeek
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -21,6 +22,7 @@ class AppPreferencesStore(context: Context, preferencesName: String = "app_prefe
         private val _firstDayOfWeekFlow = MutableStateFlow(DayOfWeek.MONDAY)
         private val _reminderEnabledFlow = MutableStateFlow(false)
         private val _reminderAdvanceMinutesFlow = MutableStateFlow(15)
+        private val _showNonCurrentWeekCoursesFlow = MutableStateFlow(false)
         @Volatile private var isInitialized = false
     }
 
@@ -31,6 +33,7 @@ class AppPreferencesStore(context: Context, preferencesName: String = "app_prefe
             _firstDayOfWeekFlow.value = getFirstDayOfWeek()
             _reminderEnabledFlow.value = isReminderEnabled()
             _reminderAdvanceMinutesFlow.value = getReminderAdvanceMinutes()
+            _showNonCurrentWeekCoursesFlow.value = isShowNonCurrentWeekCourses()
             isInitialized = true
         }
     }
@@ -40,6 +43,8 @@ class AppPreferencesStore(context: Context, preferencesName: String = "app_prefe
     val firstDayOfWeekFlow: StateFlow<DayOfWeek> = _firstDayOfWeekFlow.asStateFlow()
     val reminderEnabledFlow: StateFlow<Boolean> = _reminderEnabledFlow.asStateFlow()
     val reminderAdvanceMinutesFlow: StateFlow<Int> = _reminderAdvanceMinutesFlow.asStateFlow()
+    val showNonCurrentWeekCourses: Flow<Boolean> = _showNonCurrentWeekCoursesFlow.asStateFlow()
+    val showNonCurrentWeekCoursesFlow: StateFlow<Boolean> = _showNonCurrentWeekCoursesFlow.asStateFlow()
 
     fun isQuickImportEnabled(): Boolean = preferences.getBoolean("quick_import", false)
     fun isAutoUpdateEnabled(): Boolean = preferences.getBoolean("auto_check_update", true)
@@ -96,6 +101,16 @@ class AppPreferencesStore(context: Context, preferencesName: String = "app_prefe
         val ok = preferences.edit().putInt("reminder_advance_minutes", minutes).commit()
         if (ok) {
             _reminderAdvanceMinutesFlow.value = minutes
+        }
+        return ok
+    }
+
+    // 4. 非本周课程差异化展示设置
+    fun isShowNonCurrentWeekCourses(): Boolean = preferences.getBoolean("show_non_current_week_courses", false)
+    fun saveShowNonCurrentWeekCourses(show: Boolean): Boolean {
+        val ok = preferences.edit().putBoolean("show_non_current_week_courses", show).commit()
+        if (ok) {
+            _showNonCurrentWeekCoursesFlow.value = show
         }
         return ok
     }

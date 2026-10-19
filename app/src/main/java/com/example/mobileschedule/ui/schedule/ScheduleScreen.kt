@@ -103,6 +103,15 @@ import com.example.mobileschedule.data.model.WeekSchedule
 import com.example.mobileschedule.ui.theme.CourseColorPalette
 import com.example.mobileschedule.ui.theme.CourseColorTheme
 import com.example.mobileschedule.ui.theme.LocalIsDarkTheme
+import android.widget.Toast
+import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.geometry.CornerRadius
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.PathEffect
+import androidx.compose.ui.graphics.drawscope.Stroke
+import com.example.mobileschedule.data.rules.CourseSlotState
+import com.example.mobileschedule.data.rules.ScheduleRules
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
 import java.time.temporal.ChronoUnit
@@ -291,6 +300,7 @@ fun ScheduleScreen(
     }
     CourseDetailSheet(
         state = detailState,
+        currentWeek = (state as? ScheduleUiState.Ready)?.week?.schedule?.week,
         onDismiss = onDismissDetail,
         onEditCourse = onEditCourse,
         onDeleteCourse = onDeleteCourse,
@@ -390,7 +400,8 @@ fun WeekScheduleGrid(
 
     val arrangementCache = remember(week.semester.id) { mutableStateMapOf<Long, CourseArrangement>() }
     LaunchedEffect(schedule) {
-        schedule.arrangements.forEach { arrangement ->
+        val all = if (schedule.allArrangements.isNotEmpty()) schedule.allArrangements else schedule.arrangements
+        all.forEach { arrangement ->
             arrangementCache[arrangement.id] = arrangement
         }
     }
@@ -398,20 +409,22 @@ fun WeekScheduleGrid(
     var overlappingCourses by remember { mutableStateOf<List<com.example.mobileschedule.data.model.CourseArrangement>?>(null) }
 
     fun getWeekSchedule(weekNum: Int): WeekSchedule {
-        if (weekNum == schedule.week) return schedule
         val monday = config.firstWeekMonday.plusWeeks((weekNum - 1).toLong())
-        val knownArrangements = if (arrangementCache.isNotEmpty()) {
+        val allArrangements = if (schedule.allArrangements.isNotEmpty()) {
+            schedule.allArrangements
+        } else if (arrangementCache.isNotEmpty()) {
             arrangementCache.values.toList()
         } else {
             schedule.arrangements
         }
-        val arrangements = knownArrangements.filter { weekNum in it.weeks }
+        val arrangements = if (weekNum == schedule.week) schedule.arrangements else allArrangements.filter { weekNum in it.weeks }
         return WeekSchedule(
             semesterId = week.semester.id,
             week = weekNum,
             monday = monday,
             sunday = monday.plusDays(6),
             arrangements = arrangements,
+            allArrangements = allArrangements,
         )
     }
 
@@ -702,6 +715,7 @@ fun WeekScheduleGrid(
                     verticalArrangement = Arrangement.spacedBy(8.dp),
                 ) {
                     items(courses, key = { it.id }) { course ->
+                        val courseSlot = ScheduleRules.determineCourseSlotState(displayedWeek, course.weeks)
                         Surface(
                             onClick = { overlappingCourses = null; onCourseClick(course.id) },
                             shape = RoundedCornerShape(12.dp),
@@ -709,9 +723,22 @@ fun WeekScheduleGrid(
                             modifier = Modifier.fillMaxWidth().testTag("conflict_course_${course.id}"),
                         ) {
                             Column(Modifier.padding(horizontal = 14.dp, vertical = 10.dp)) {
-                                Text(course.name, fontWeight = FontWeight.SemiBold, style = MaterialTheme.typography.bodyMedium)
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Text(course.name, fontWeight = FontWeight.SemiBold, style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(1f))
+                                    if (courseSlot is CourseSlotState.INACTIVE) {
+                                        Text(
+                                            "非本周",
+                                            style = MaterialTheme.typography.labelSmall,
+                                            fontWeight = FontWeight.Bold,
+                                            color = MaterialTheme.colorScheme.outline,
+                                            modifier = Modifier.padding(start = 6.dp),
+                                        )
+                                    }
+                                }
+                                val loc = course.location ?: "地点未提供"
+                                val extra = if (courseSlot is CourseSlotState.INACTIVE) " · ${courseSlot.notice}" else ""
                                 Text(
-                                    course.location ?: "地点未提供",
+                                    "$loc$extra",
                                     color = MaterialTheme.colorScheme.outline,
                                     style = MaterialTheme.typography.bodySmall,
                                 )
@@ -791,6 +818,7 @@ private fun WeekScheduleContent(
     onCourseClick: (Long) -> Unit,
     onOverlappingClick: (List<CourseArrangement>) -> Unit,
 ) {
+    val context = LocalContext.current
     val displayedDays = remember(schedule.week, config.firstWeekMonday, displayOptions.showWeekend, displayOptions.firstDayOfWeek) {
         calculateDisplayedDays(
             firstWeekMonday = config.firstWeekMonday,
@@ -802,16 +830,23 @@ private fun WeekScheduleContent(
     val todayColumnIndex = displayedDays.firstOrNull { it.date == today }?.columnIndex
     val columnCount = if (displayOptions.showWeekend) 7 else 5
 
+    val coursesToDisplay = if (displayOptions.showNonCurrentWeekCourses) {
+        schedule.allArrangements.ifEmpty { schedule.arrangements }
+    } else {
+        schedule.arrangements
+    }
+
     Box(Modifier.width(gridWidth).height(gridHeight)) {
         WeekGridLines(gridWidth, gridHeight, dayWidth, rowHeight, config.totalSections, columnCount, todayColumnIndex)
         Box(Modifier.fillMaxSize()) {
-            buildWeekGridSlots(schedule.arrangements, showWeekend = displayOptions.showWeekend).forEach { slot ->
+            buildWeekGridSlots(coursesToDisplay, showWeekend = displayOptions.showWeekend, currentWeek = schedule.week).forEach { slot ->
                 val dayItem = displayedDays.firstOrNull { it.dayOfWeek == slot.dayOfWeek }
                 if (dayItem != null) {
                     if (slot.arrangements.size == 2 && dayWidth >= 136.dp) {
                         slot.arrangements.forEachIndexed { lane, course ->
                             WeekGridCard(
                                 slot = WeekGridSlot(slot.dayOfWeek, course.startSection, course.endSection, listOf(course)),
+                                currentWeek = schedule.week,
                                 columnIndex = dayItem.columnIndex,
                                 dayWidth = dayWidth,
                                 rowHeight = rowHeight,
@@ -819,12 +854,19 @@ private fun WeekScheduleContent(
                                 laneCount = 2,
                                 displayOptions = displayOptions,
                                 enableTag = isCurrentPage,
-                                onClick = { onCourseClick(course.id) },
+                                onClick = {
+                                    val state = ScheduleRules.determineCourseSlotState(schedule.week, course.weeks)
+                                    if (state is CourseSlotState.INACTIVE) {
+                                        Toast.makeText(context, "${course.name}：${state.notice}", Toast.LENGTH_SHORT).show()
+                                    }
+                                    onCourseClick(course.id)
+                                },
                             )
                         }
                     } else {
                         WeekGridCard(
                             slot = slot,
+                            currentWeek = schedule.week,
                             columnIndex = dayItem.columnIndex,
                             dayWidth = dayWidth,
                             rowHeight = rowHeight,
@@ -832,15 +874,22 @@ private fun WeekScheduleContent(
                             enableTag = isCurrentPage,
                             onClick = {
                                 val course = slot.arrangements.singleOrNull()
-                                if (course != null) onCourseClick(course.id)
-                                else onOverlappingClick(slot.arrangements)
+                                if (course != null) {
+                                    val state = ScheduleRules.determineCourseSlotState(schedule.week, course.weeks)
+                                    if (state is CourseSlotState.INACTIVE) {
+                                        Toast.makeText(context, "${course.name}：${state.notice}", Toast.LENGTH_SHORT).show()
+                                    }
+                                    onCourseClick(course.id)
+                                } else {
+                                    onOverlappingClick(slot.arrangements)
+                                }
                             },
                         )
                     }
                 }
             }
         }
-        if (schedule.arrangements.isEmpty()) {
+        if (coursesToDisplay.isEmpty()) {
             Box(
                 Modifier.fillMaxSize(),
                 contentAlignment = Alignment.Center,
@@ -906,12 +955,34 @@ private fun WeekGridCard(
     onClick: () -> Unit,
     lane: Int = 0,
     laneCount: Int = 1,
+    currentWeek: Int = 1,
     displayOptions: ScheduleDisplayOptions = ScheduleDisplayOptions(),
     enableTag: Boolean = true,
 ) {
     val course = slot.arrangements.singleOrNull()
     val isDark = LocalIsDarkTheme.current
-    val palette = if (course != null) {
+    val isInactive = course != null && currentWeek !in course.weeks
+    val inactiveState = if (isInactive) {
+        ScheduleRules.determineCourseSlotState(currentWeek, course.weeks) as? CourseSlotState.INACTIVE
+    } else null
+
+    val palette = if (isInactive) {
+        if (isDark) {
+            CourseColorPalette(
+                container = Color(0xFF2C2C2E),
+                onContainer = Color(0xFFD1D5DB),
+                secondaryText = Color(0xFF9CA3AF),
+                accent = Color(0xFF6B7280),
+            )
+        } else {
+            CourseColorPalette(
+                container = Color(0xFFF3F4F6),
+                onContainer = Color(0xFF374151),
+                secondaryText = Color(0xFF6B7280),
+                accent = Color(0xFF9CA3AF),
+            )
+        }
+    } else if (course != null) {
         CourseColorTheme.forCourse(course.name, isDark)
     } else {
         CourseColorPalette(
@@ -926,10 +997,30 @@ private fun WeekGridCard(
     val description = if (course == null) {
         "${weekdays[slot.dayOfWeek - 1]}，第${slot.startSection}至${slot.endSection}节，同一时段${slot.arrangements.size}门课程，点击查看列表"
     } else buildList {
-        add("${weekdays[slot.dayOfWeek - 1]}，第${slot.startSection}至${slot.endSection}节，${course.name}")
+        val weekNotice = if (isInactive && inactiveState != null) "（非本周，${inactiveState.weekDescription}上课）" else ""
+        add("${weekdays[slot.dayOfWeek - 1]}，第${slot.startSection}至${slot.endSection}节，$weekNotice${course.name}")
         if (displayOptions.showLocation) add(course.location ?: "地点未提供")
         if (displayOptions.showTeacher) add(course.teacher ?: "教师未提供")
     }.joinToString("，")
+
+    val borderColor = if (isDark) Color(0xFF9CA3AF) else Color(0xFF6B7280)
+    val cardAlpha = if (isInactive) 0.45f else 1.0f
+
+    val borderModifier = if (isInactive) {
+        Modifier.drawWithContent {
+            drawContent()
+            val strokeWidth = 1.dp.toPx()
+            val halfStroke = strokeWidth / 2f
+            val dashEffect = PathEffect.dashPathEffect(floatArrayOf(6.dp.toPx(), 4.dp.toPx()), 0f)
+            drawRoundRect(
+                color = borderColor,
+                topLeft = Offset(halfStroke, halfStroke),
+                size = Size(size.width - strokeWidth, size.height - strokeWidth),
+                cornerRadius = CornerRadius(8.dp.toPx(), 8.dp.toPx()),
+                style = Stroke(width = strokeWidth, pathEffect = dashEffect),
+            )
+        }
+    } else Modifier
 
     Card(
         modifier = Modifier
@@ -940,6 +1031,8 @@ private fun WeekGridCard(
             .width(dayWidth / laneCount - 4.dp)
             .height(rowHeight * slot.sectionSpan - 6.dp)
             .then(if (enableTag) Modifier.testTag(tag) else Modifier)
+            .alpha(cardAlpha)
+            .then(borderModifier)
             .clickable(onClick = onClick)
             .semantics(mergeDescendants = true) { contentDescription = description },
         shape = RoundedCornerShape(8.dp),
@@ -968,6 +1061,16 @@ private fun WeekGridCard(
                     style = MaterialTheme.typography.labelSmall.copy(fontSize = 9.sp),
                 )
             } else {
+                if (isInactive) {
+                    Text(
+                        "非本周",
+                        maxLines = 1,
+                        fontWeight = FontWeight.Bold,
+                        color = palette.secondaryText,
+                        style = MaterialTheme.typography.labelSmall.copy(fontSize = 8.sp, lineHeight = 10.sp),
+                        modifier = Modifier.testTag("inactive_badge_${course.id}"),
+                    )
+                }
                 Text(
                     course.name,
                     maxLines = if (displayOptions.showFullCourseName) Int.MAX_VALUE else 3,

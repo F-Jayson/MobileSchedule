@@ -22,8 +22,36 @@ import java.time.LocalTime
 import java.time.format.DateTimeFormatter
 import java.time.temporal.ChronoUnit
 
+sealed class CourseSlotState {
+    abstract val isActive: Boolean
+
+    data object ACTIVE : CourseSlotState() {
+        override val isActive: Boolean = true
+        override fun toString(): String = "ACTIVE"
+    }
+
+    data class INACTIVE(
+        val weekDescription: String,
+        val weeks: Set<Int> = emptySet(),
+    ) : CourseSlotState() {
+        override val isActive: Boolean = false
+        override fun toString(): String = "INACTIVE($weekDescription)"
+
+        val notice: String get() = "${weekDescription}上课（非本周）"
+    }
+}
+
+data class CourseSlotItem(
+    val arrangement: CourseArrangement,
+    val state: CourseSlotState,
+) {
+    val isActive: Boolean get() = state.isActive
+    val isNonCurrentWeek: Boolean get() = !state.isActive
+}
+
 /** Single source of calendar and range rules for persistence, importing and the UI. */
 object ScheduleRules {
+
     fun validateConfig(draft: SemesterConfigDraft): List<RuleIssue> = buildList {
         if (draft.displayName.isBlank()) add(RuleIssue(RuleField.DISPLAY_NAME, RuleIssueCode.DISPLAY_NAME_REQUIRED))
         if (draft.firstWeekMonday.dayOfWeek != DayOfWeek.MONDAY) {
@@ -95,18 +123,111 @@ object ScheduleRules {
         return if (week > config.totalWeeks) WeekPosition.AfterSemester else WeekPosition.InSemester(week.toInt())
     }
 
+    fun formatWeekInterval(weeks: Collection<Int>): String {
+        val sorted = weeks.toSet().sorted()
+        if (sorted.isEmpty()) return "未知周次"
+        if (sorted.size == 1) return "第${sorted.first()}周"
+
+        val first = sorted.first()
+        val last = sorted.last()
+
+        // Continuous range (连续周)
+        if (sorted == (first..last).toList()) {
+            return "第${first}~${last}周"
+        }
+
+        // Odd weeks (单周)
+        if (sorted.all { it % 2 == 1 } && sorted == (first..last step 2).toList()) {
+            return "第${first}~${last}周(单)"
+        }
+
+        // Even weeks (双周)
+        if (sorted.all { it % 2 == 0 } && sorted == (first..last step 2).toList()) {
+            return "第${first}~${last}周(双)"
+        }
+
+        // Discrete / jump weeks: group contiguous blocks
+        val segments = mutableListOf<Pair<Int, Int>>()
+        var segStart = first
+        var segEnd = first
+        for (w in sorted.drop(1)) {
+            if (w == segEnd + 1) {
+                segEnd = w
+            } else {
+                segments.add(segStart to segEnd)
+                segStart = w
+                segEnd = w
+            }
+        }
+        segments.add(segStart to segEnd)
+
+        return segments.joinToString("、") { (s, e) ->
+            if (s == e) "第${s}周" else "第${s}~${e}周"
+        }
+    }
+
+    fun determineCourseSlotState(week: Int, courseWeeks: Collection<Int>): CourseSlotState {
+        val weeksSet = courseWeeks.toSet()
+        return if (week in weeksSet) {
+            CourseSlotState.ACTIVE
+        } else {
+            CourseSlotState.INACTIVE(
+                weekDescription = formatWeekInterval(weeksSet),
+                weeks = weeksSet,
+            )
+        }
+    }
+
+    fun dayCourses(
+        semesterId: Long,
+        dayOfWeek: Int,
+        week: Int,
+        arrangements: List<CourseArrangement>,
+    ): List<CourseSlotItem> {
+        return arrangements.asSequence()
+            .filter { it.semesterId == semesterId && it.dayOfWeek == dayOfWeek }
+            .sortedWith(compareBy(CourseArrangement::startSection, CourseArrangement::endSection, CourseArrangement::id))
+            .map { CourseSlotItem(it, determineCourseSlotState(week, it.weeks)) }
+            .toList()
+    }
+
+    fun weekCourses(
+        semesterId: Long,
+        week: Int,
+        arrangements: List<CourseArrangement>,
+        includeNonCurrentWeek: Boolean = false,
+    ): List<CourseSlotItem> {
+        return arrangements.asSequence()
+            .filter { it.semesterId == semesterId }
+            .map { CourseSlotItem(it, determineCourseSlotState(week, it.weeks)) }
+            .filter { includeNonCurrentWeek || it.isActive }
+            .sortedWith(
+                compareBy(
+                    { it.arrangement.dayOfWeek },
+                    { it.arrangement.startSection },
+                    { it.arrangement.endSection },
+                    { it.arrangement.id }
+                )
+            )
+            .toList()
+    }
+
     fun weekSchedule(
         semesterId: Long, config: SemesterConfig, week: Int, arrangements: List<CourseArrangement>,
     ): WeekSchedule {
         require(week in 1..config.totalWeeks) { "Week is outside this semester" }
         val monday = config.firstWeekMonday.plusWeeks((week - 1).toLong())
+        val semesterArrangements = arrangements.filter { it.semesterId == semesterId }
         return WeekSchedule(
             semesterId, week, monday, monday.plusDays(6),
-            arrangements.asSequence()
-                .filter { it.semesterId == semesterId && week in it.weeks }
+            semesterArrangements.asSequence()
+                .filter { week in it.weeks }
                 .sortedWith(compareBy(CourseArrangement::dayOfWeek, CourseArrangement::startSection,
                     CourseArrangement::endSection, CourseArrangement::id))
                 .toList(),
+            allArrangements = semesterArrangements
+                .sortedWith(compareBy(CourseArrangement::dayOfWeek, CourseArrangement::startSection,
+                    CourseArrangement::endSection, CourseArrangement::id)),
         )
     }
 

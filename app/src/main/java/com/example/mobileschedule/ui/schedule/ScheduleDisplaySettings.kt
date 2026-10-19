@@ -44,6 +44,7 @@ data class ScheduleDisplayOptions(
     val showWeekend: Boolean = true,
     val firstDayOfWeek: DayOfWeek = DayOfWeek.MONDAY,
     val showFullCourseName: Boolean = false,
+    val showNonCurrentWeekCourses: Boolean = false,
 )
 
 /** Presentation-only choices; imported courses and semester configuration remain in Room. */
@@ -63,12 +64,18 @@ class ScheduleDisplaySettingsStore(context: Context, preferencesName: String = "
         } else {
             appPreferences.getFirstDayOfWeek()
         }
+        val showNonCurrentWeek = if (preferences.contains("show_non_current_week_courses")) {
+            preferences.getBoolean("show_non_current_week_courses", false)
+        } else {
+            appPreferences.isShowNonCurrentWeekCourses()
+        }
         return ScheduleDisplayOptions(
             showLocation = preferences.getBoolean("show_location", true),
             showTeacher = preferences.getBoolean("show_teacher", true),
             showWeekend = showWeekend,
             firstDayOfWeek = firstDay,
             showFullCourseName = preferences.getBoolean("show_full_course_name", false),
+            showNonCurrentWeekCourses = showNonCurrentWeek,
         )
     }
 
@@ -79,10 +86,12 @@ class ScheduleDisplaySettingsStore(context: Context, preferencesName: String = "
             .putBoolean("show_weekend", options.showWeekend)
             .putString("first_day_of_week", options.firstDayOfWeek.name)
             .putBoolean("show_full_course_name", options.showFullCourseName)
+            .putBoolean("show_non_current_week_courses", options.showNonCurrentWeekCourses)
             .commit()
         val ok2 = appPreferences.saveShowWeekend(options.showWeekend)
         val ok3 = appPreferences.saveFirstDayOfWeek(options.firstDayOfWeek)
-        return ok1 && ok2 && ok3
+        val ok4 = appPreferences.saveShowNonCurrentWeekCourses(options.showNonCurrentWeekCourses)
+        return ok1 && ok2 && ok3 && ok4
     }
 }
 
@@ -216,6 +225,24 @@ fun ScheduleDisplaySettingsScreen(
                             checked = options.showFullCourseName,
                             onCheckedChange = { onOptionsChange(options.copy(showFullCourseName = it)) },
                             modifier = Modifier.testTag("display_full_course_name_switch"),
+                        )
+                    }
+
+                    Row(
+                        Modifier
+                            .fillMaxWidth()
+                            .clickable { onOptionsChange(options.copy(showNonCurrentWeekCourses = !options.showNonCurrentWeekCourses)) }
+                            .padding(vertical = 12.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Column(Modifier.weight(1f)) {
+                            Text("显示非本周课程", fontWeight = FontWeight.SemiBold, style = MaterialTheme.typography.bodyLarge)
+                            Text("以半透明及虚线细边框显示本周不上课但在其他周有课的课程", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.outline)
+                        }
+                        Switch(
+                            checked = options.showNonCurrentWeekCourses,
+                            onCheckedChange = { onOptionsChange(options.copy(showNonCurrentWeekCourses = it)) },
+                            modifier = Modifier.testTag("display_non_current_week_switch"),
                         )
                     }
                 }

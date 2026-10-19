@@ -49,4 +49,5 @@ data class WeekSchedule(
     val monday: LocalDate,
     val sunday: LocalDate,
     val arrangements: List<CourseArrangement>,
+    val allArrangements: List<CourseArrangement> = arrangements,
 )

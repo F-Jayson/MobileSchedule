@@ -1,6 +1,7 @@
 package com.example.mobileschedule.ui.schedule
 
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.background
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -42,6 +43,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.mobileschedule.data.model.CourseArrangement
 import com.example.mobileschedule.data.model.CourseOrigin
+import com.example.mobileschedule.data.rules.CourseSlotState
+import com.example.mobileschedule.data.rules.ScheduleRules
 import com.example.mobileschedule.ui.theme.CourseColorTheme
 import com.example.mobileschedule.ui.theme.LocalIsDarkTheme
 import java.time.format.DateTimeFormatter
@@ -53,6 +56,7 @@ private val detailWeekdays = listOf("周一", "周二", "周三", "周四", "周
 @Composable
 internal fun CourseDetailSheet(
     state: CourseDetailUiState,
+    currentWeek: Int? = null,
     onDismiss: () -> Unit,
     onEditCourse: (CourseArrangement) -> Unit = {},
     onDeleteCourse: (Long) -> Unit = {},
@@ -153,6 +157,41 @@ internal fun CourseDetailSheet(
                                     color = colorPalette.onContainer,
                                     modifier = Modifier.testTag("detail_name"),
                                 )
+                            }
+                        }
+
+                        if (currentWeek != null) {
+                            val slotState = ScheduleRules.determineCourseSlotState(currentWeek, course.weeks)
+                            if (slotState is CourseSlotState.INACTIVE) {
+                                Surface(
+                                    shape = RoundedCornerShape(14.dp),
+                                    color = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.7f),
+                                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)),
+                                    modifier = Modifier.fillMaxWidth().testTag("detail_non_current_week_notice"),
+                                ) {
+                                    Row(
+                                        Modifier.padding(horizontal = 14.dp, vertical = 10.dp),
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                    ) {
+                                        Text(
+                                            "非本周",
+                                            fontWeight = FontWeight.Bold,
+                                            color = MaterialTheme.colorScheme.onSecondaryContainer,
+                                            style = MaterialTheme.typography.labelSmall,
+                                            modifier = Modifier
+                                                .background(MaterialTheme.colorScheme.outline.copy(alpha = 0.2f), RoundedCornerShape(4.dp))
+                                                .padding(horizontal = 6.dp, vertical = 2.dp),
+                                        )
+                                        Text(
+                                            slotState.notice,
+                                            style = MaterialTheme.typography.bodyMedium,
+                                            fontWeight = FontWeight.SemiBold,
+                                            color = MaterialTheme.colorScheme.onSecondaryContainer,
+                                            modifier = Modifier.testTag("detail_non_current_week_text"),
+                                        )
+                                    }
+                                }
                             }
                         }
 

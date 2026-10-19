@@ -13,6 +13,9 @@ import com.example.mobileschedule.data.model.RepoResult
 import com.example.mobileschedule.data.model.RuleIssueCode
 import com.example.mobileschedule.data.model.WeekPosition
 import com.example.mobileschedule.data.repository.ScheduleRepository
+import com.example.mobileschedule.data.rules.CourseSlotItem
+import com.example.mobileschedule.data.rules.CourseSlotState
+import com.example.mobileschedule.data.rules.ScheduleRules
 import com.example.mobileschedule.ui.theme.CourseColorStore
 import dagger.hilt.android.lifecycle.HiltViewModel
 import java.time.LocalDate
@@ -264,6 +267,19 @@ class ScheduleViewModel @Inject constructor(private val repository: ScheduleRepo
             is RepoResult.Ok -> res.value
             is RepoResult.Err -> emptyList()
         }
+    }
+
+    fun getCourseSlotState(arrangement: CourseArrangement, targetWeek: Int? = null): CourseSlotState {
+        val ready = uiState.value as? ScheduleUiState.Ready
+        val week = targetWeek ?: ready?.week?.schedule?.week ?: 1
+        return ScheduleRules.determineCourseSlotState(week, arrangement.weeks)
+    }
+
+    fun getDayCourses(dayOfWeek: Int, targetWeek: Int? = null): List<CourseSlotItem> {
+        val ready = uiState.value as? ScheduleUiState.Ready ?: return emptyList()
+        val week = targetWeek ?: ready.week.schedule.week
+        val arrangements = ready.week.schedule.allArrangements.ifEmpty { ready.week.schedule.arrangements }
+        return ScheduleRules.dayCourses(ready.week.semester.id, dayOfWeek, week, arrangements)
     }
 
     private fun formatError(error: DataError): String {
