@@ -112,6 +112,7 @@ import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.drawscope.Stroke
 import com.example.mobileschedule.data.rules.CourseSlotState
 import com.example.mobileschedule.data.rules.ScheduleRules
+import com.example.mobileschedule.ui.schedule.export.ScheduleExportSheet
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
 import java.time.temporal.ChronoUnit
@@ -278,12 +279,14 @@ fun ScheduleScreen(
         )
         is ScheduleUiState.Ready -> {
             var showWeekPicker by remember { mutableStateOf(false) }
+            var showExportSheet by remember { mutableStateOf(false) }
             Column(Modifier.fillMaxSize()) {
                 ScheduleSemesterHeader(
                     state = state,
                     showWeekend = displayOptions.showWeekend,
                     onImport = onImport,
                     onAddCourse = onAddCourse,
+                    onExportImage = { showExportSheet = true },
                 )
                 Box(Modifier.weight(1f)) {
                     WeekScheduleGrid(
@@ -296,6 +299,13 @@ fun ScheduleScreen(
                 ScheduleWeekControls(state, onPreviousWeek, onNextWeek, onReturnToCurrentWeek)
             }
             if (showWeekPicker) WeekPickerDialog(state, onSelectWeek) { showWeekPicker = false }
+            ScheduleExportSheet(
+                isOpen = showExportSheet,
+                activeWeek = state.week,
+                today = state.today,
+                displayOptions = displayOptions,
+                onDismiss = { showExportSheet = false },
+            )
         }
     }
     CourseDetailSheet(

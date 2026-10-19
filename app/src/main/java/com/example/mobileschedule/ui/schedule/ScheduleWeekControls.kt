@@ -40,6 +40,7 @@ internal fun ScheduleSemesterHeader(
     showWeekend: Boolean = true,
     onImport: () -> Unit = {},
     onAddCourse: () -> Unit = {},
+    onExportImage: () -> Unit = {},
 ) {
     CompositionLocalProvider(LocalMinimumInteractiveComponentSize provides 40.dp) {
     Surface(
@@ -105,6 +106,14 @@ internal fun ScheduleSemesterHeader(
                         modifier = Modifier.padding(start = 6.dp).testTag("schedule_add_course"),
                     ) {
                         Text("+ 添加课程", fontWeight = FontWeight.SemiBold, style = MaterialTheme.typography.labelMedium)
+                    }
+                    FilledTonalButton(
+                        onClick = onExportImage,
+                        shape = RoundedCornerShape(20.dp),
+                        contentPadding = PaddingValues(horizontal = 10.dp, vertical = 0.dp),
+                        modifier = Modifier.padding(start = 6.dp).testTag("schedule_export_image"),
+                    ) {
+                        Text("导出长图", fontWeight = FontWeight.SemiBold, style = MaterialTheme.typography.labelMedium)
                     }
                     if (state.week.schedule.arrangements.isEmpty()) FilledTonalButton(
                         onClick = onImport,

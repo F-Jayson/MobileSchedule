@@ -96,7 +96,10 @@ class ScheduleDisplaySettingsStore(context: Context, preferencesName: String = "
 }
 
 @Composable
-fun ScheduleDisplaySettingsRoute(onBack: () -> Unit) {
+fun ScheduleDisplaySettingsRoute(
+    onBack: () -> Unit,
+    onExportImage: () -> Unit = {},
+) {
     val context = LocalContext.current
     val store = remember(context) { ScheduleDisplaySettingsStore(context) }
     var options by remember(store) { mutableStateOf(store.read()) }
@@ -110,6 +113,7 @@ fun ScheduleDisplaySettingsRoute(onBack: () -> Unit) {
             } else saveError = true
         },
         onBack = onBack,
+        onExportImage = onExportImage,
         saveError = saveError,
     )
 }
@@ -120,6 +124,7 @@ fun ScheduleDisplaySettingsScreen(
     options: ScheduleDisplayOptions,
     onOptionsChange: (ScheduleDisplayOptions) -> Unit,
     onBack: () -> Unit,
+    onExportImage: () -> Unit = {},
     saveError: Boolean = false,
 ) {
     var showFirstDayDialog by remember { mutableStateOf(false) }
@@ -300,6 +305,38 @@ fun ScheduleDisplaySettingsScreen(
                             modifier = Modifier.testTag("display_first_day_entry"),
                         )
                     }
+                }
+            }
+
+            // 导出长图与壁纸分享入口
+            Surface(
+                shape = RoundedCornerShape(18.dp),
+                color = MaterialTheme.colorScheme.surfaceContainerLow,
+                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable { onExportImage() }
+                    .testTag("display_export_image_entry"),
+            ) {
+                Row(
+                    Modifier.padding(horizontal = 16.dp, vertical = 14.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                ) {
+                    Column(Modifier.weight(1f)) {
+                        Text("导出本周课表长图", fontWeight = FontWeight.SemiBold, style = MaterialTheme.typography.bodyLarge)
+                        Text(
+                            "离线渲染超清 2x/3x 课表长图，支持暗黑壁纸与纯白打印风格",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.outline,
+                        )
+                    }
+                    Text(
+                        "导出 >",
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.primary,
+                        style = MaterialTheme.typography.labelLarge,
+                    )
                 }
             }
 
