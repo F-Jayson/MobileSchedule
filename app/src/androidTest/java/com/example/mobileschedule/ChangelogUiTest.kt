@@ -33,7 +33,7 @@ class ChangelogUiTest {
         val state = ChangelogUiState(
             entries = ChangelogRepository.bundledChangelogs,
             isChecking = false,
-            currentVersion = "1.2.0",
+            currentVersion = "1.5.0",
         )
 
         compose.setContent {
@@ -52,11 +52,11 @@ class ChangelogUiTest {
         compose.onNodeWithText("更新日志").assertIsDisplayed()
 
         // 2. Verify Bundled Versions
-        compose.onNodeWithTag("changelog_card_1.2.0").assertIsDisplayed()
-        compose.onNodeWithText("v1.2.0").assertIsDisplayed()
-        compose.onNodeWithText("课表功能扩展、桌面小组件与外观主题").assertIsDisplayed()
+        compose.onNodeWithTag("changelog_card_1.5.0").assertIsDisplayed()
+        compose.onNodeWithText("v1.5.0").assertIsDisplayed()
+        compose.onNodeWithText("大屏自适应、多规格小组件、壁纸定制与体验优化").assertIsDisplayed()
 
-        // 3. Verify Current Version Badge on v1.2.0
+        // 3. Verify Current Version Badge on v1.5.0
         compose.onNodeWithTag("changelog_badge_current", useUnmergedTree = true).assertIsDisplayed()
         compose.onNodeWithText("当前版本", useUnmergedTree = true).assertIsDisplayed()
 
@@ -65,6 +65,7 @@ class ChangelogUiTest {
         compose.onNodeWithTag("changelog_update_button", useUnmergedTree = true).assertDoesNotExist()
 
         // 5. Verify Historical Versions exist in list
+        compose.onNodeWithTag("changelog_card_1.2.0").assertExists()
         compose.onNodeWithTag("changelog_card_1.1.0").assertExists()
         compose.onNodeWithTag("changelog_card_1.0.0").assertExists()
 
@@ -85,16 +86,16 @@ class ChangelogUiTest {
     @Test
     fun testChangelogScreen_displaysRemoteNewVersion_showsBadgeAndTriggerUpdate() {
         val dummyRemoteInfo = AppUpdateInfo(
-            currentVersionName = "1.2.0",
-            latestVersionName = "1.3.0",
-            releaseTitle = "v1.3.0 课表升级与日程云同步",
+            currentVersionName = "1.5.0",
+            latestVersionName = "1.6.0",
+            releaseTitle = "v1.6.0 课表升级与日程云同步",
             releaseNotes = """
                 • 新增日历双向同步服务
                 • 优化今日课表桌面组件动效
                 • 提升教务离散周次解析速度
             """.trimIndent(),
-            downloadUrl = "https://example.com/mobileschedule-v1.3.0.apk",
-            browserUrl = "https://example.com/releases/v1.3.0",
+            downloadUrl = "https://example.com/mobileschedule-v1.6.0.apk",
+            browserUrl = "https://example.com/releases/v1.6.0",
             hasUpdate = true,
             apkSize = 16500000L,
             publishedAt = "2026-10-20",
@@ -103,13 +104,13 @@ class ChangelogUiTest {
 
         val mergedEntries = ChangelogRepository.mergeWithRemoteUpdate(
             remoteInfo = dummyRemoteInfo,
-            currentVersion = "1.2.0",
+            currentVersion = "1.5.0",
         )
 
         val state = ChangelogUiState(
             entries = mergedEntries,
             isChecking = false,
-            currentVersion = "1.2.0",
+            currentVersion = "1.5.0",
         )
 
         var triggeredUpdateInfo: AppUpdateInfo? = null
@@ -126,9 +127,9 @@ class ChangelogUiTest {
         }
 
         // 1. Verify New Version Card
-        compose.onNodeWithTag("changelog_card_1.3.0").assertIsDisplayed()
-        compose.onNodeWithText("v1.3.0", useUnmergedTree = true).assertIsDisplayed()
-        compose.onNodeWithText("v1.3.0 课表升级与日程云同步", useUnmergedTree = true).assertIsDisplayed()
+        compose.onNodeWithTag("changelog_card_1.6.0").assertIsDisplayed()
+        compose.onNodeWithText("v1.6.0", useUnmergedTree = true).assertIsDisplayed()
+        compose.onNodeWithText("v1.6.0 课表升级与日程云同步", useUnmergedTree = true).assertIsDisplayed()
 
         // 2. Verify "新版本" Badge
         compose.onNodeWithTag("changelog_badge_new", useUnmergedTree = true).assertIsDisplayed()
@@ -140,7 +141,7 @@ class ChangelogUiTest {
 
         // 4. Verify Update Button is present on the new version
         compose.onNodeWithTag("changelog_update_button", useUnmergedTree = true).assertIsDisplayed()
-        compose.onNodeWithText("立即更新至 v1.3.0", useUnmergedTree = true).assertIsDisplayed()
+        compose.onNodeWithText("立即更新至 v1.6.0", useUnmergedTree = true).assertIsDisplayed()
 
         // Save evidence screenshot
         saveSyntheticScreenshot(
@@ -158,7 +159,7 @@ class ChangelogUiTest {
         val state = ChangelogUiState(
             entries = ChangelogRepository.bundledChangelogs,
             isChecking = false,
-            currentVersion = "1.2.0",
+            currentVersion = "1.5.0",
         )
 
         compose.setContent {
@@ -255,7 +256,7 @@ class ChangelogUiTest {
             }
         }
 
-        compose.onNodeWithTag("settings_changelog_entry").assertIsDisplayed()
+        compose.onNodeWithTag("settings_changelog_entry").performScrollTo().assertIsDisplayed()
         compose.onNodeWithText("更新日志").assertIsDisplayed()
         compose.onNodeWithText("版本演进历史与新特性说明").assertIsDisplayed()
 

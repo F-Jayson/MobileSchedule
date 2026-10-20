@@ -61,6 +61,7 @@ class AppUpdateChecker(
                 val fallbackApkUrl = DownloadMirror.BLOG.buildDownloadUrl(rawDownloadUrl, blogOrigin = blogOrigin).takeIf { it.isNotBlank() }
                 val fallbackApkSize = json.optLong("apkSize", 0L).takeIf { it > 0 }
                 val publishedAt = json.optString("publishedAt").takeIf { it.isNotBlank() }
+                val forceUpdate = json.optBoolean("forceUpdate", false)
 
                 val assetsArray = json.optJSONArray("assets")
                 val assetsList = mutableListOf<UpdateAsset>()
@@ -95,6 +96,7 @@ class AppUpdateChecker(
                     apkSize = finalApkSize,
                     publishedAt = publishedAt,
                     targetAbi = targetAbi,
+                    forceUpdate = forceUpdate,
                 )
                 Result.success(updateInfo)
             } else if (responseCode == HttpURLConnection.HTTP_NOT_FOUND) {
@@ -135,6 +137,7 @@ class AppUpdateChecker(
                 val body = json.optString("body", "暂无更新说明。").ifBlank { "暂无更新说明。" }
                 val htmlUrl = json.optString("html_url", "https://github.com/$owner/$repo/releases")
                 val publishedAt = json.optString("published_at").takeIf { it.isNotBlank() }
+                val forceUpdate = body.contains("[force-update]", ignoreCase = true) || body.contains("【强制更新】")
 
                 val assets = json.optJSONArray("assets") ?: JSONArray()
                 val assetsList = mutableListOf<UpdateAsset>()
@@ -169,6 +172,7 @@ class AppUpdateChecker(
                     apkSize = finalApkSize,
                     publishedAt = publishedAt,
                     targetAbi = targetAbi,
+                    forceUpdate = false,
                 )
                 Result.success(updateInfo)
             } else if (responseCode == HttpURLConnection.HTTP_NOT_FOUND) {

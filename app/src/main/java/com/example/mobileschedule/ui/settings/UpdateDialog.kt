@@ -30,6 +30,7 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.window.DialogProperties
 import androidx.compose.foundation.clickable
 import com.example.mobileschedule.data.model.AppUpdateInfo
 import com.example.mobileschedule.data.model.DownloadMirror
@@ -85,14 +86,27 @@ fun UpdateDialog(
 ) {
     if (state is UpdateUiState.Idle) return
 
+    val isForceUpdate = when (state) {
+        is UpdateUiState.Available -> state.info.forceUpdate
+        is UpdateUiState.Downloading -> state.info.forceUpdate
+        is UpdateUiState.ReadyToInstall -> state.info.forceUpdate
+        else -> false
+    }
+
     AlertDialog(
         onDismissRequest = {
-            if (state is UpdateUiState.Downloading) {
-                onCancelDownload()
-            } else {
-                onDismiss()
+            if (!isForceUpdate) {
+                if (state is UpdateUiState.Downloading) {
+                    onCancelDownload()
+                } else {
+                    onDismiss()
+                }
             }
         },
+        properties = DialogProperties(
+            dismissOnBackPress = !isForceUpdate,
+            dismissOnClickOutside = !isForceUpdate,
+        ),
         shape = RoundedCornerShape(24.dp),
         modifier = Modifier.testTag("update_dialog"),
         title = {
@@ -100,7 +114,28 @@ fun UpdateDialog(
                 UpdateUiState.Idle -> Unit
                 UpdateUiState.Checking -> Text("检查更新", fontWeight = FontWeight.Bold)
                 is UpdateUiState.Latest -> Text("已是最新版本", fontWeight = FontWeight.Bold)
-                is UpdateUiState.Available -> Text("发现新版本 v${state.info.latestVersionName}", fontWeight = FontWeight.Bold)
+                is UpdateUiState.Available -> {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    ) {
+                        Text("发现新版本 v${state.info.latestVersionName}", fontWeight = FontWeight.Bold)
+                        if (state.info.forceUpdate) {
+                            Surface(
+                                shape = RoundedCornerShape(4.dp),
+                                color = MaterialTheme.colorScheme.error,
+                            ) {
+                                Text(
+                                    "强制更新",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.onError,
+                                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
+                                    fontWeight = FontWeight.Bold,
+                                )
+                            }
+                        }
+                    }
+                }
                 is UpdateUiState.Downloading -> Text("正在下载更新…", fontWeight = FontWeight.Bold)
                 is UpdateUiState.ReadyToInstall -> Text("下载完成", fontWeight = FontWeight.Bold)
                 is UpdateUiState.Error -> Text("检查更新提示", fontWeight = FontWeight.Bold)
@@ -199,6 +234,22 @@ fun UpdateDialog(
                         }
 
                         Text("更新日志：", style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.SemiBold)
+
+                        if (state.info.forceUpdate) {
+                            Surface(
+                                shape = RoundedCornerShape(8.dp),
+                                color = MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.7f),
+                                modifier = Modifier.fillMaxWidth(),
+                            ) {
+                                Text(
+                                    "提示：此版本为重要强制更新，必须升级安装后方可继续正常使用。",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onErrorContainer,
+                                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 8.dp),
+                                    fontWeight = FontWeight.Medium,
+                                )
+                            }
+                        }
 
                         Surface(
                             shape = RoundedCornerShape(12.dp),
@@ -348,12 +399,14 @@ fun UpdateDialog(
                         ) {
                             Text("网页查看")
                         }
-                        Spacer(Modifier.width(4.dp))
-                        TextButton(
-                            onClick = onDismiss,
-                            modifier = Modifier.testTag("update_dialog_dismiss"),
-                        ) {
-                            Text("稍后再说")
+                        if (!state.info.forceUpdate) {
+                            Spacer(Modifier.width(4.dp))
+                            TextButton(
+                                onClick = onDismiss,
+                                modifier = Modifier.testTag("update_dialog_dismiss"),
+                            ) {
+                                Text("稍后再说")
+                            }
                         }
                     }
                 }
@@ -366,11 +419,13 @@ fun UpdateDialog(
                     }
                 }
                 is UpdateUiState.ReadyToInstall -> {
-                    TextButton(
-                        onClick = onDismiss,
-                        modifier = Modifier.testTag("update_dialog_dismiss"),
-                    ) {
-                        Text("稍后安装")
+                    if (!state.info.forceUpdate) {
+                        TextButton(
+                            onClick = onDismiss,
+                            modifier = Modifier.testTag("update_dialog_dismiss"),
+                        ) {
+                            Text("稍后安装")
+                        }
                     }
                 }
                 is UpdateUiState.Error -> {

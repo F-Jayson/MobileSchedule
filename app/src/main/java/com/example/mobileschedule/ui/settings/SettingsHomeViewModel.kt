@@ -523,10 +523,25 @@ class SettingsHomeViewModel @Inject constructor(
     fun cancelDownload() {
         downloadJob?.cancel()
         downloadJob = null
-        mutableUpdateState.value = UpdateUiState.Idle
+        val info = lastCheckedInfo
+        if (info != null && info.forceUpdate && info.hasUpdate) {
+            mutableUpdateState.value = UpdateUiState.Available(info)
+        } else {
+            mutableUpdateState.value = UpdateUiState.Idle
+        }
     }
 
     fun dismissUpdateDialog() {
+        val current = mutableUpdateState.value
+        val info = when (current) {
+            is UpdateUiState.Available -> current.info
+            is UpdateUiState.Downloading -> current.info
+            is UpdateUiState.ReadyToInstall -> current.info
+            else -> null
+        }
+        if (info != null && info.forceUpdate && info.hasUpdate) {
+            return
+        }
         checkJob?.cancel()
         if (mutableUpdateState.value is UpdateUiState.Downloading) {
             cancelDownload()
