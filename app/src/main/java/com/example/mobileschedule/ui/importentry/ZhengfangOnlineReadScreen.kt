@@ -119,7 +119,14 @@ fun ZhengfangOnlineReadScreen(
     val reading = readState == OnlineReadState.Reading
 
     val webView = remember(context) {
-        WebView(context).apply {
+        object : WebView(context) {
+            override fun requestRectangleOnScreen(rect: android.graphics.Rect?, immediate: Boolean): Boolean {
+                // Prevent requestRectangleOnScreen calls from propagating to Compose / WindowManager
+                // during typing. WebKit handles DOM viewport scrolling internally; native propagation
+                // causes window jittering and erratic viewport bouncing on every keystroke.
+                return false
+            }
+        }.apply {
             settings.javaScriptEnabled = true
             settings.domStorageEnabled = true
             settings.allowFileAccess = false
