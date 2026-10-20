@@ -1,0 +1,261 @@
+<?xml version="1.0" encoding="utf-8"?>
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/widget_4x4_root"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent">
+
+    <!-- Dynamic Background Layer with Rounded Corners & Opacity Tinting -->
+    <ImageView
+        android:id="@+id/widget_4x4_background_image"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:scaleType="fitXY"
+        android:src="@drawable/bg_widget"
+        android:contentDescription="@null" />
+
+    <!-- Foreground Content -->
+    <LinearLayout
+        android:id="@+id/widget_4x4_content_container"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:orientation="vertical"
+        android:padding="8dp">
+
+        <!-- Top Header Bar -->
+        <LinearLayout
+            android:id="@+id/widget_4x4_header"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:gravity="center_vertical">
+
+            <ImageView
+                android:id="@+id/widget_4x4_header_icon"
+                android:layout_width="14dp"
+                android:layout_height="14dp"
+                android:src="@drawable/ic_schedule"
+                android:contentDescription="@null" />
+
+            <TextView
+                android:id="@+id/widget_4x4_week_title"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="4dp"
+                android:text="第 7 周 (本周课表)"
+                android:textSize="13sp"
+                android:textStyle="bold" />
+
+            <FrameLayout
+                android:layout_width="0dp"
+                android:layout_height="0dp"
+                android:layout_weight="1" />
+
+            <TextView
+                android:id="@+id/widget_4x4_active_semester"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="2025-2026学年"
+                android:textSize="11sp" />
+
+            <ImageView
+                android:id="@+id/widget_4x4_launch_icon"
+                android:layout_width="12dp"
+                android:layout_height="12dp"
+                android:layout_marginStart="4dp"
+                android:src="@drawable/ic_widget_launch"
+                android:contentDescription="@null" />
+        </LinearLayout>
+
+        <!-- Divider Line -->
+        <ImageView
+            android:id="@+id/widget_4x4_divider"
+            android:layout_width="match_parent"
+            android:layout_height="1dp"
+            android:layout_marginTop="5dp"
+            android:layout_marginBottom="5dp"
+            android:background="@color/widget_divider"
+            android:contentDescription="@null" />
+
+        <!-- Weekly Miniature Grid Table -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="0dp"
+            android:layout_weight="1"
+            android:orientation="horizontal">
+
+            <!-- Ruler Column (Left) -->
+            <LinearLayout
+                android:layout_width="20dp"
+                android:layout_height="match_parent"
+                android:orientation="vertical">
+
+                <TextView
+                    android:id="@+id/widget_4x4_ruler_header"
+                    android:layout_width="match_parent"
+                    android:layout_height="18dp"
+                    android:gravity="center"
+                    android:text="节"
+                    android:textSize="10sp"
+                    android:textStyle="bold" />
+
+                <TextView
+                    android:id="@+id/widget_4x4_ruler_1"
+                    android:layout_width="match_parent"
+                    android:layout_height="0dp"
+                    android:layout_weight="1"
+                    android:gravity="center"
+                    android:text="1-2"
+                    android:textSize="9sp" />
+
+                <TextView
+                    android:id="@+id/widget_4x4_ruler_2"
+                    android:layout_width="match_parent"
+                    android:layout_height="0dp"
+                    android:layout_weight="1"
+                    android:gravity="center"
+                    android:text="3-4"
+                    android:textSize="9sp" />
+
+                <TextView
+                    android:id="@+id/widget_4x4_ruler_3"
+                    android:layout_width="match_parent"
+                    android:layout_height="0dp"
+                    android:layout_weight="1"
+                    android:gravity="center"
+                    android:text="5-6"
+                    android:textSize="9sp" />
+
+                <TextView
+                    android:id="@+id/widget_4x4_ruler_4"
+                    android:layout_width="match_parent"
+                    android:layout_height="0dp"
+                    android:layout_weight="1"
+                    android:gravity="center"
+                    android:text="7-8"
+                    android:textSize="9sp" />
+
+                <TextView
+                    android:id="@+id/widget_4x4_ruler_5"
+                    android:layout_width="match_parent"
+                    android:layout_height="0dp"
+                    android:layout_weight="1"
+                    android:gravity="center"
+                    android:text="晚"
+                    android:textSize="9sp" />
+            </LinearLayout>
+
+            <!-- Column 1 (Monday) -->
+            <LinearLayout
+                android:id="@+id/widget_4x4_col_1"
+                android:layout_width="0dp"
+                android:layout_height="match_parent"
+                android:layout_weight="1"
+                android:orientation="vertical"
+                android:padding="1dp">
+                <TextView android:id="@+id/widget_4x4_header_1" android:layout_width="match_parent" android:layout_height="18dp" android:gravity="center" android:text="一" android:textSize="11sp" android:textStyle="bold" />
+                <TextView android:id="@+id/widget_4x4_d1_s1" android:layout_width="match_parent" android:layout_height="0dp" android:layout_weight="1" android:gravity="center" android:textSize="9sp" android:maxLines="2" android:ellipsize="end" android:layout_margin="1dp" />
+                <TextView android:id="@+id/widget_4x4_d1_s2" android:layout_width="match_parent" android:layout_height="0dp" android:layout_weight="1" android:gravity="center" android:textSize="9sp" android:maxLines="2" android:ellipsize="end" android:layout_margin="1dp" />
+                <TextView android:id="@+id/widget_4x4_d1_s3" android:layout_width="match_parent" android:layout_height="0dp" android:layout_weight="1" android:gravity="center" android:textSize="9sp" android:maxLines="2" android:ellipsize="end" android:layout_margin="1dp" />
+                <TextView android:id="@+id/widget_4x4_d1_s4" android:layout_width="match_parent" android:layout_height="0dp" android:layout_weight="1" android:gravity="center" android:textSize="9sp" android:maxLines="2" android:ellipsize="end" android:layout_margin="1dp" />
+                <TextView android:id="@+id/widget_4x4_d1_s5" android:layout_width="match_parent" android:layout_height="0dp" android:layout_weight="1" android:gravity="center" android:textSize="9sp" android:maxLines="2" android:ellipsize="end" android:layout_margin="1dp" />
+            </LinearLayout>
+
+            <!-- Column 2 (Tuesday) -->
+            <LinearLayout
+                android:id="@+id/widget_4x4_col_2"
+                android:layout_width="0dp"
+                android:layout_height="match_parent"
+                android:layout_weight="1"
+                android:orientation="vertical"
+                android:padding="1dp">
+                <TextView android:id="@+id/widget_4x4_header_2" android:layout_width="match_parent" android:layout_height="18dp" android:gravity="center" android:text="二" android:textSize="11sp" android:textStyle="bold" />
+                <TextView android:id="@+id/widget_4x4_d2_s1" android:layout_width="match_parent" android:layout_height="0dp" android:layout_weight="1" android:gravity="center" android:textSize="9sp" android:maxLines="2" android:ellipsize="end" android:layout_margin="1dp" />
+                <TextView android:id="@+id/widget_4x4_d2_s2" android:layout_width="match_parent" android:layout_height="0dp" android:layout_weight="1" android:gravity="center" android:textSize="9sp" android:maxLines="2" android:ellipsize="end" android:layout_margin="1dp" />
+                <TextView android:id="@+id/widget_4x4_d2_s3" android:layout_width="match_parent" android:layout_height="0dp" android:layout_weight="1" android:gravity="center" android:textSize="9sp" android:maxLines="2" android:ellipsize="end" android:layout_margin="1dp" />
+                <TextView android:id="@+id/widget_4x4_d2_s4" android:layout_width="match_parent" android:layout_height="0dp" android:layout_weight="1" android:gravity="center" android:textSize="9sp" android:maxLines="2" android:ellipsize="end" android:layout_margin="1dp" />
+                <TextView android:id="@+id/widget_4x4_d2_s5" android:layout_width="match_parent" android:layout_height="0dp" android:layout_weight="1" android:gravity="center" android:textSize="9sp" android:maxLines="2" android:ellipsize="end" android:layout_margin="1dp" />
+            </LinearLayout>
+
+            <!-- Column 3 (Wednesday) -->
+            <LinearLayout
+                android:id="@+id/widget_4x4_col_3"
+                android:layout_width="0dp"
+                android:layout_height="match_parent"
+                android:layout_weight="1"
+                android:orientation="vertical"
+                android:padding="1dp">
+                <TextView android:id="@+id/widget_4x4_header_3" android:layout_width="match_parent" android:layout_height="18dp" android:gravity="center" android:text="三" android:textSize="11sp" android:textStyle="bold" />
+                <TextView android:id="@+id/widget_4x4_d3_s1" android:layout_width="match_parent" android:layout_height="0dp" android:layout_weight="1" android:gravity="center" android:textSize="9sp" android:maxLines="2" android:ellipsize="end" android:layout_margin="1dp" />
+                <TextView android:id="@+id/widget_4x4_d3_s2" android:layout_width="match_parent" android:layout_height="0dp" android:layout_weight="1" android:gravity="center" android:textSize="9sp" android:maxLines="2" android:ellipsize="end" android:layout_margin="1dp" />
+                <TextView android:id="@+id/widget_4x4_d3_s3" android:layout_width="match_parent" android:layout_height="0dp" android:layout_weight="1" android:gravity="center" android:textSize="9sp" android:maxLines="2" android:ellipsize="end" android:layout_margin="1dp" />
+                <TextView android:id="@+id/widget_4x4_d3_s4" android:layout_width="match_parent" android:layout_height="0dp" android:layout_weight="1" android:gravity="center" android:textSize="9sp" android:maxLines="2" android:ellipsize="end" android:layout_margin="1dp" />
+                <TextView android:id="@+id/widget_4x4_d3_s5" android:layout_width="match_parent" android:layout_height="0dp" android:layout_weight="1" android:gravity="center" android:textSize="9sp" android:maxLines="2" android:ellipsize="end" android:layout_margin="1dp" />
+            </LinearLayout>
+
+            <!-- Column 4 (Thursday) -->
+            <LinearLayout
+                android:id="@+id/widget_4x4_col_4"
+                android:layout_width="0dp"
+                android:layout_height="match_parent"
+                android:layout_weight="1"
+                android:orientation="vertical"
+                android:padding="1dp">
+                <TextView android:id="@+id/widget_4x4_header_4" android:layout_width="match_parent" android:layout_height="18dp" android:gravity="center" android:text="四" android:textSize="11sp" android:textStyle="bold" />
+                <TextView android:id="@+id/widget_4x4_d4_s1" android:layout_width="match_parent" android:layout_height="0dp" android:layout_weight="1" android:gravity="center" android:textSize="9sp" android:maxLines="2" android:ellipsize="end" android:layout_margin="1dp" />
+                <TextView android:id="@+id/widget_4x4_d4_s2" android:layout_width="match_parent" android:layout_height="0dp" android:layout_weight="1" android:gravity="center" android:textSize="9sp" android:maxLines="2" android:ellipsize="end" android:layout_margin="1dp" />
+                <TextView android:id="@+id/widget_4x4_d4_s3" android:layout_width="match_parent" android:layout_height="0dp" android:layout_weight="1" android:gravity="center" android:textSize="9sp" android:maxLines="2" android:ellipsize="end" android:layout_margin="1dp" />
+                <TextView android:id="@+id/widget_4x4_d4_s4" android:layout_width="match_parent" android:layout_height="0dp" android:layout_weight="1" android:gravity="center" android:textSize="9sp" android:maxLines="2" android:ellipsize="end" android:layout_margin="1dp" />
+                <TextView android:id="@+id/widget_4x4_d4_s5" android:layout_width="match_parent" android:layout_height="0dp" android:layout_weight="1" android:gravity="center" android:textSize="9sp" android:maxLines="2" android:ellipsize="end" android:layout_margin="1dp" />
+            </LinearLayout>
+
+            <!-- Column 5 (Friday) -->
+            <LinearLayout
+                android:id="@+id/widget_4x4_col_5"
+                android:layout_width="0dp"
+                android:layout_height="match_parent"
+                android:layout_weight="1"
+                android:orientation="vertical"
+                android:padding="1dp">
+                <TextView android:id="@+id/widget_4x4_header_5" android:layout_width="match_parent" android:layout_height="18dp" android:gravity="center" android:text="五" android:textSize="11sp" android:textStyle="bold" />
+                <TextView android:id="@+id/widget_4x4_d5_s1" android:layout_width="match_parent" android:layout_height="0dp" android:layout_weight="1" android:gravity="center" android:textSize="9sp" android:maxLines="2" android:ellipsize="end" android:layout_margin="1dp" />
+                <TextView android:id="@+id/widget_4x4_d5_s2" android:layout_width="match_parent" android:layout_height="0dp" android:layout_weight="1" android:gravity="center" android:textSize="9sp" android:maxLines="2" android:ellipsize="end" android:layout_margin="1dp" />
+                <TextView android:id="@+id/widget_4x4_d5_s3" android:layout_width="match_parent" android:layout_height="0dp" android:layout_weight="1" android:gravity="center" android:textSize="9sp" android:maxLines="2" android:ellipsize="end" android:layout_margin="1dp" />
+                <TextView android:id="@+id/widget_4x4_d5_s4" android:layout_width="match_parent" android:layout_height="0dp" android:layout_weight="1" android:gravity="center" android:textSize="9sp" android:maxLines="2" android:ellipsize="end" android:layout_margin="1dp" />
+                <TextView android:id="@+id/widget_4x4_d5_s5" android:layout_width="match_parent" android:layout_height="0dp" android:layout_weight="1" android:gravity="center" android:textSize="9sp" android:maxLines="2" android:ellipsize="end" android:layout_margin="1dp" />
+            </LinearLayout>
+
+            <!-- Column 6 (Saturday) -->
+            <LinearLayout
+                android:id="@+id/widget_4x4_col_6"
+                android:layout_width="0dp"
+                android:layout_height="match_parent"
+                android:layout_weight="1"
+                android:orientation="vertical"
+                android:padding="1dp">
+                <TextView android:id="@+id/widget_4x4_header_6" android:layout_width="match_parent" android:layout_height="18dp" android:gravity="center" android:text="六" android:textSize="11sp" android:textStyle="bold" />
+                <TextView android:id="@+id/widget_4x4_d6_s1" android:layout_width="match_parent" android:layout_height="0dp" android:layout_weight="1" android:gravity="center" android:textSize="9sp" android:maxLines="2" android:ellipsize="end" android:layout_margin="1dp" />
+                <TextView android:id="@+id/widget_4x4_d6_s2" android:layout_width="match_parent" android:layout_height="0dp" android:layout_weight="1" android:gravity="center" android:textSize="9sp" android:maxLines="2" android:ellipsize="end" android:layout_margin="1dp" />
+                <TextView android:id="@+id/widget_4x4_d6_s3" android:layout_width="match_parent" android:layout_height="0dp" android:layout_weight="1" android:gravity="center" android:textSize="9sp" android:maxLines="2" android:ellipsize="end" android:layout_margin="1dp" />
+                <TextView android:id="@+id/widget_4x4_d6_s4" android:layout_width="match_parent" android:layout_height="0dp" android:layout_weight="1" android:gravity="center" android:textSize="9sp" android:maxLines="2" android:ellipsize="end" android:layout_margin="1dp" />
+                <TextView android:id="@+id/widget_4x4_d6_s5" android:layout_width="match_parent" android:layout_height="0dp" android:layout_weight="1" android:gravity="center" android:textSize="9sp" android:maxLines="2" android:ellipsize="end" android:layout_margin="1dp" />
+            </LinearLayout>
+
+            <!-- Column 7 (Sunday) -->
+            <LinearLayout
+                android:id="@+id/widget_4x4_col_7"
+                android:layout_width="0dp"
+                android:layout_height="match_parent"
+                android:layout_weight="1"
+                android:orientation="vertical"
+                android:padding="1dp">
+                <TextView android:id="@+id/widget_4x4_header_7" android:layout_width="match_parent" android:layout_height="18dp" android:gravity="center" android:text="日" android:textSize="11sp" android:textStyle="bold" />
+                <TextView android:id="@+id/widget_4x4_d7_s1" android:layout_width="match_parent" android:layout_height="0dp" android:layout_weight="1" android:gravity="center" android:textSize="9sp" android:maxLines="2" android:ellipsize="end" android:layout_margin="1dp" />
+                <TextView android:id="@+id/widget_4x4_d7_s2" android:layout_width="match_parent" android:layout_height="0dp" android:layout_weight="1" android:gravity="center" android:textSize="9sp" android:maxLines="2" android:ellipsize="end" android:layout_margin="1dp" />
+                <TextView android:id="@+id/widget_4x4_d7_s3" android:layout_width="match_parent" android:layout_height="0dp" android:layout_weight="1" android:gravity="center" android:textSize="9sp" android:maxLines="2" android:ellipsize="end" android:layout_margin="1dp" />
+                <TextView android:id="@+id/widget_4x4_d7_s4" android:layout_width="match_parent" android:layout_height="0dp" android:layout_weight="1" android:gravity="center" android:textSize="9sp" android:maxLines="2" android:ellipsize="end" android:layout_margin="1dp" />
+                <TextView android:id="@+id/widget_4x4_d7_s5" android:layout_width="match_parent" android:layout_height="0dp" android:layout_weight="1" android:gravity="center" android:textSize="9sp" android:maxLines="2" android:ellipsize="end" android:layout_margin="1dp" />
+            </LinearLayout>
+
+        </LinearLayout>
+    </LinearLayout>
+</FrameLayout>

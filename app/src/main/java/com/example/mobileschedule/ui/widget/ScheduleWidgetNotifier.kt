@@ -16,6 +16,8 @@ object ScheduleWidgetNotifier {
     fun notifyDataChanged() {
         appContext?.let { context ->
             ScheduleAppWidgetProvider.sendRefreshBroadcast(context)
+            ScheduleAppWidget2x2Provider.sendRefreshBroadcast(context)
+            ScheduleAppWidget4x4Provider.sendRefreshBroadcast(context)
         }
     }
 }
