@@ -90,6 +90,7 @@ dependencies {
     implementation(libs.compose.ui)
     implementation(libs.compose.ui.tooling.preview)
     implementation(libs.compose.material3)
+    implementation("androidx.compose.material3:material3-window-size-class")
     implementation(libs.coroutines.android)
     implementation(libs.kotlinx.serialization.json)
     implementation(libs.room.runtime)

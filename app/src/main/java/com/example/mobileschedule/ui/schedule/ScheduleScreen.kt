@@ -235,6 +235,7 @@ fun ScheduleScreen(
     detailState: CourseDetailUiState = CourseDetailUiState.Closed,
     formState: CourseFormState = CourseFormState.Closed,
     displayOptions: ScheduleDisplayOptions = ScheduleDisplayOptions(),
+    isExpandedOverride: Boolean? = null,
     onPreviousWeek: () -> Unit = {},
     onNextWeek: () -> Unit = {},
     onSelectWeek: (Int) -> Unit = {},
@@ -294,24 +295,44 @@ fun ScheduleScreen(
         is ScheduleUiState.Ready -> {
             var showWeekPicker by remember { mutableStateOf(false) }
             var showExportSheet by remember { mutableStateOf(false) }
-            Column(Modifier.fillMaxSize()) {
-                ScheduleSemesterHeader(
-                    state = state,
-                    showWeekend = displayOptions.showWeekend,
-                    onImport = onImport,
-                    onAddCourse = onAddCourse,
-                    onExportImage = { showExportSheet = true },
-                )
-                Box(Modifier.weight(1f)) {
-                    WeekScheduleGrid(
-                        state.week, state.today, onCourseClick,
+            BoxWithConstraints(Modifier.fillMaxSize().testTag("schedule_container")) {
+                val isExpanded = isExpandedOverride ?: (maxWidth >= 840.dp)
+                if (isExpanded) {
+                    AdaptiveScheduleScaffold(
+                        state = state,
+                        detailState = detailState,
                         displayOptions = displayOptions,
-                        unfinishedTaskCounts = state.unfinishedTaskCounts,
-                        onWeekTitleClick = { showWeekPicker = true },
-                        onPreviousWeek = onPreviousWeek, onNextWeek = onNextWeek,
+                        onCourseClick = onCourseClick,
+                        onPreviousWeek = onPreviousWeek,
+                        onNextWeek = onNextWeek,
+                        onSelectWeek = onSelectWeek,
+                        onReturnToCurrentWeek = onReturnToCurrentWeek,
+                        onAddCourse = onAddCourse,
+                        onImport = onImport,
+                        onExportImage = { showExportSheet = true },
+                        onSettings = onSettings,
                     )
+                } else {
+                    Column(Modifier.fillMaxSize()) {
+                        ScheduleSemesterHeader(
+                            state = state,
+                            showWeekend = displayOptions.showWeekend,
+                            onImport = onImport,
+                            onAddCourse = onAddCourse,
+                            onExportImage = { showExportSheet = true },
+                        )
+                        Box(Modifier.weight(1f)) {
+                            WeekScheduleGrid(
+                                state.week, state.today, onCourseClick,
+                                displayOptions = displayOptions,
+                                unfinishedTaskCounts = state.unfinishedTaskCounts,
+                                onWeekTitleClick = { showWeekPicker = true },
+                                onPreviousWeek = onPreviousWeek, onNextWeek = onNextWeek,
+                            )
+                        }
+                        ScheduleWeekControls(state, onPreviousWeek, onNextWeek, onReturnToCurrentWeek)
+                    }
                 }
-                ScheduleWeekControls(state, onPreviousWeek, onNextWeek, onReturnToCurrentWeek)
             }
             if (showWeekPicker) WeekPickerDialog(state, onSelectWeek) { showWeekPicker = false }
             ScheduleExportSheet(
