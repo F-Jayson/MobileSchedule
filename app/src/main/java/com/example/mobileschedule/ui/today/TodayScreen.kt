@@ -7,12 +7,12 @@ import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -33,6 +33,10 @@ import com.example.mobileschedule.ui.schedule.CourseFormState
 import com.example.mobileschedule.ui.theme.CourseColorStore
 import com.example.mobileschedule.ui.theme.CourseColorTheme
 import com.example.mobileschedule.ui.theme.LocalIsDarkTheme
+import com.example.mobileschedule.ui.today.countdown.CountdownBottomSheet
+import com.example.mobileschedule.ui.today.countdown.CountdownTarget
+import com.example.mobileschedule.ui.today.countdown.TodayCountdownEncouragementCard
+import com.example.mobileschedule.ui.today.countdown.TodayCountdownPill
 import java.time.Instant
 import java.time.LocalDate
 import java.time.LocalDateTime
@@ -52,18 +56,31 @@ fun TodayRoute(
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val detailState by viewModel.detailState.collectAsStateWithLifecycle()
     val formState by viewModel.formState.collectAsStateWithLifecycle()
+    val isCountdownSheetVisible by viewModel.isCountdownSheetVisible.collectAsStateWithLifecycle()
     val scope = rememberCoroutineScope()
 
     TodayScreen(
         state = uiState,
         onCourseClick = { viewModel.showCourseDetail(it) },
+        onCountdownClick = { viewModel.openCountdownSheet() },
         onConfigure = { onConfigure(null) },
         onSettings = onSettings,
         onImport = onImport,
     )
 
-    // Course Detail Sheet
+    // Countdown Bottom Sheet
     val readyState = uiState as? TodayUiState.Ready
+    if (isCountdownSheetVisible && readyState != null) {
+        CountdownBottomSheet(
+            countdowns = readyState.countdowns,
+            onDismiss = { viewModel.closeCountdownSheet() },
+            onPinTarget = viewModel::pinCountdown,
+            onDeleteCustom = viewModel::deleteCustomCountdown,
+            onAddCustom = viewModel::addCustomCountdown,
+        )
+    }
+
+    // Course Detail Sheet
     val semesterConfig = (readyState?.schedule as? TodaySchedule.Ready)?.semester?.config
 
     CourseDetailSheet(
@@ -113,6 +130,7 @@ fun TodayRoute(
 fun TodayScreen(
     state: TodayUiState,
     onCourseClick: (Long) -> Unit = {},
+    onCountdownClick: () -> Unit = {},
     onConfigure: () -> Unit = {},
     onSettings: () -> Unit = {},
     onImport: () -> Unit = {},
@@ -140,7 +158,10 @@ fun TodayScreen(
                     schedule = state.schedule,
                     currentTime = state.currentTime,
                     unfinishedTasksByCourse = state.unfinishedTasksByCourse,
+                    countdowns = state.countdowns,
+                    primaryCountdown = state.primaryCountdown,
                     onCourseClick = onCourseClick,
+                    onCountdownClick = onCountdownClick,
                     onConfigure = onConfigure,
                     onSettings = onSettings,
                     onImport = onImport,
@@ -155,7 +176,10 @@ private fun TodayContent(
     schedule: TodaySchedule,
     currentTime: LocalTime,
     unfinishedTasksByCourse: Map<Long, List<CourseTask>> = emptyMap(),
+    countdowns: List<CountdownTarget> = emptyList(),
+    primaryCountdown: CountdownTarget? = null,
     onCourseClick: (Long) -> Unit,
+    onCountdownClick: () -> Unit = {},
     onConfigure: () -> Unit,
     onSettings: () -> Unit,
     onImport: () -> Unit,
@@ -165,47 +189,118 @@ private fun TodayContent(
     ) {
         when (schedule) {
             is TodaySchedule.NoActiveSemester -> {
-                TodaySimpleHeader(LocalDate.now(), "未选择学期")
-                TodayEmptyCard(
-                    title = "欢迎使用课程表",
-                    message = "还没有设置活动学期。请先创建新学期或导入课表，即可随时查看每日课程。",
-                    buttonLabel = "前往设置",
-                    onButtonClick = onSettings,
-                    secondaryButtonLabel = "导入课表",
-                    onSecondaryButtonClick = onImport,
-                )
+                TodaySimpleHeader(LocalDate.now(), "未选择学期", primaryCountdown, onCountdownClick)
+                Column(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(horizontal = 16.dp)
+                        .verticalScroll(rememberScrollState()),
+                    verticalArrangement = Arrangement.spacedBy(16.dp),
+                ) {
+                    TodayEmptyCard(
+                        title = "欢迎使用课程表",
+                        message = "还没有设置活动学期。请先创建新学期或导入课表，即可随时查看每日课程。",
+                        buttonLabel = "前往设置",
+                        onButtonClick = onSettings,
+                        secondaryButtonLabel = "导入课表",
+                        onSecondaryButtonClick = onImport,
+                    )
+                    if (countdowns.isNotEmpty()) {
+                        var selectedIndex by remember { mutableIntStateOf(0) }
+                        TodayCountdownEncouragementCard(
+                            countdowns = countdowns,
+                            selectedIndex = selectedIndex,
+                            onSelectIndex = { selectedIndex = it },
+                            onManageClick = onCountdownClick,
+                        )
+                    }
+                }
             }
             is TodaySchedule.ConfigRequired -> {
-                TodaySimpleHeader(LocalDate.now(), schedule.semester.displayName)
-                TodayEmptyCard(
-                    title = "学期日历待配置",
-                    message = "当前学期缺少首周日期与总周数配置，完成配置后即可生成今日课表。",
-                    buttonLabel = "配置学期",
-                    onButtonClick = onConfigure,
-                )
+                TodaySimpleHeader(LocalDate.now(), schedule.semester.displayName, primaryCountdown, onCountdownClick)
+                Column(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(horizontal = 16.dp)
+                        .verticalScroll(rememberScrollState()),
+                    verticalArrangement = Arrangement.spacedBy(16.dp),
+                ) {
+                    TodayEmptyCard(
+                        title = "学期日历待配置",
+                        message = "当前学期缺少首周日期与总周数配置，完成配置后即可生成今日课表。",
+                        buttonLabel = "配置学期",
+                        onButtonClick = onConfigure,
+                    )
+                    if (countdowns.isNotEmpty()) {
+                        var selectedIndex by remember { mutableIntStateOf(0) }
+                        TodayCountdownEncouragementCard(
+                            countdowns = countdowns,
+                            selectedIndex = selectedIndex,
+                            onSelectIndex = { selectedIndex = it },
+                            onManageClick = onCountdownClick,
+                        )
+                    }
+                }
             }
             is TodaySchedule.BeforeSemester -> {
-                TodaySimpleHeader(schedule.today, schedule.semester.displayName)
-                TodayEmptyCard(
-                    title = "学期尚未开始",
-                    message = "距离开学还有 ${schedule.daysUntilStart} 天（开学日期：${schedule.semester.config?.firstWeekMonday}）。好好享受充实美好的假期吧！",
-                    badge = "开学倒计时 ${schedule.daysUntilStart} 天",
-                )
+                TodaySimpleHeader(schedule.today, schedule.semester.displayName, primaryCountdown, onCountdownClick)
+                Column(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(horizontal = 16.dp)
+                        .verticalScroll(rememberScrollState()),
+                    verticalArrangement = Arrangement.spacedBy(16.dp),
+                ) {
+                    TodayEmptyCard(
+                        title = "学期尚未开始",
+                        message = "距离开学还有 ${schedule.daysUntilStart} 天（开学日期：${schedule.semester.config?.firstWeekMonday}）。好好享受充实美好的假期吧！",
+                        badge = "开学倒计时 ${schedule.daysUntilStart} 天",
+                    )
+                    if (countdowns.isNotEmpty()) {
+                        var selectedIndex by remember { mutableIntStateOf(0) }
+                        TodayCountdownEncouragementCard(
+                            countdowns = countdowns,
+                            selectedIndex = selectedIndex,
+                            onSelectIndex = { selectedIndex = it },
+                            onManageClick = onCountdownClick,
+                        )
+                    }
+                }
             }
             is TodaySchedule.AfterSemester -> {
-                TodaySimpleHeader(schedule.today, schedule.semester.displayName)
-                TodayEmptyCard(
-                    title = "本学期已结课",
-                    message = "本学期所有教学周课程均已结束。祝你期末考试取得理想成绩，假期愉快！",
-                    badge = "学期已完结",
-                )
+                TodaySimpleHeader(schedule.today, schedule.semester.displayName, primaryCountdown, onCountdownClick)
+                Column(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(horizontal = 16.dp)
+                        .verticalScroll(rememberScrollState()),
+                    verticalArrangement = Arrangement.spacedBy(16.dp),
+                ) {
+                    TodayEmptyCard(
+                        title = "本学期已结课",
+                        message = "本学期所有教学周课程均已结束。祝你期末考试取得理想成绩，假期愉快！",
+                        badge = "学期已完结",
+                    )
+                    if (countdowns.isNotEmpty()) {
+                        var selectedIndex by remember { mutableIntStateOf(0) }
+                        TodayCountdownEncouragementCard(
+                            countdowns = countdowns,
+                            selectedIndex = selectedIndex,
+                            onSelectIndex = { selectedIndex = it },
+                            onManageClick = onCountdownClick,
+                        )
+                    }
+                }
             }
             is TodaySchedule.Ready -> {
                 TodayReadyScheduleView(
                     schedule = schedule,
                     currentTime = currentTime,
                     unfinishedTasksByCourse = unfinishedTasksByCourse,
+                    countdowns = countdowns,
+                    primaryCountdown = primaryCountdown,
                     onCourseClick = onCourseClick,
+                    onCountdownClick = onCountdownClick,
                 )
             }
         }
@@ -213,7 +308,12 @@ private fun TodayContent(
 }
 
 @Composable
-private fun TodaySimpleHeader(date: LocalDate, subtitle: String) {
+private fun TodaySimpleHeader(
+    date: LocalDate,
+    subtitle: String,
+    countdown: CountdownTarget? = null,
+    onCountdownClick: () -> Unit = {},
+) {
     Column(
         Modifier
             .fillMaxWidth()
@@ -225,6 +325,7 @@ private fun TodaySimpleHeader(date: LocalDate, subtitle: String) {
         val lunar = LunarCalendarHelper.getLunarDateString(date)
 
         Row(
+            modifier = Modifier.fillMaxWidth(),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(8.dp),
         ) {
@@ -248,6 +349,13 @@ private fun TodaySimpleHeader(date: LocalDate, subtitle: String) {
                         modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp),
                     )
                 }
+            }
+            if (countdown != null) {
+                Spacer(Modifier.weight(1f))
+                TodayCountdownPill(
+                    countdown = countdown,
+                    onClick = onCountdownClick,
+                )
             }
         }
 
@@ -266,7 +374,10 @@ private fun TodayReadyScheduleView(
     schedule: TodaySchedule.Ready,
     currentTime: LocalTime,
     unfinishedTasksByCourse: Map<Long, List<CourseTask>> = emptyMap(),
+    countdowns: List<CountdownTarget> = emptyList(),
+    primaryCountdown: CountdownTarget? = null,
     onCourseClick: (Long) -> Unit,
+    onCountdownClick: () -> Unit = {},
 ) {
     val dateText = schedule.date.format(DateTimeFormatter.ofPattern("M月d日"))
     val dayChinese = LunarCalendarHelper.dayOfWeekChinese(schedule.dayOfWeek)
@@ -279,6 +390,7 @@ private fun TodayReadyScheduleView(
             .testTag("today_header"),
     ) {
         Row(
+            modifier = Modifier.fillMaxWidth(),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(8.dp),
         ) {
@@ -302,6 +414,13 @@ private fun TodayReadyScheduleView(
                         modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp),
                     )
                 }
+            }
+            if (primaryCountdown != null) {
+                Spacer(Modifier.weight(1f))
+                TodayCountdownPill(
+                    countdown = primaryCountdown,
+                    onClick = onCountdownClick,
+                )
             }
         }
 
@@ -334,15 +453,32 @@ private fun TodayReadyScheduleView(
     }
 
     if (schedule.courses.isEmpty()) {
-        TodayEmptyCard(
-            title = "今天没有课",
-            message = if (schedule.dayOfWeek in 6..7) {
-                "惬意的周末时光，好好放松休息一下，为新的一周积蓄能量吧！"
-            } else {
-                "今天全天没有排课，给自己充充电，去图书馆看看书或者运动一下吧~"
-            },
-            badge = "轻松无课日",
-        )
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(horizontal = 16.dp)
+                .verticalScroll(rememberScrollState()),
+            verticalArrangement = Arrangement.spacedBy(16.dp),
+        ) {
+            TodayEmptyCard(
+                title = "今天没有课",
+                message = if (schedule.dayOfWeek in 6..7) {
+                    "惬意的周末时光，好好放松休息一下，为新的一周积蓄能量吧！"
+                } else {
+                    "今天全天没有排课，给自己充充电，去图书馆看看书或者运动一下吧~"
+                },
+                badge = "轻松无课日",
+            )
+            if (countdowns.isNotEmpty()) {
+                var selectedIndex by remember { mutableIntStateOf(0) }
+                TodayCountdownEncouragementCard(
+                    countdowns = countdowns,
+                    selectedIndex = selectedIndex,
+                    onSelectIndex = { selectedIndex = it },
+                    onManageClick = onCountdownClick,
+                )
+            }
+        }
     } else {
         // Summary banner for ongoing / upcoming class
         TodayStatusSummaryBanner(schedule.courses, currentTime)
@@ -764,11 +900,12 @@ private fun TodayEmptyCard(
     onButtonClick: () -> Unit = {},
     secondaryButtonLabel: String? = null,
     onSecondaryButtonClick: () -> Unit = {},
+    modifier: Modifier = Modifier,
 ) {
     Box(
-        Modifier
-            .fillMaxSize()
-            .padding(24.dp)
+        modifier
+            .fillMaxWidth()
+            .padding(vertical = 12.dp)
             .testTag("today_empty"),
         contentAlignment = Alignment.Center,
     ) {

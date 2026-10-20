@@ -7,6 +7,9 @@ import com.example.mobileschedule.data.repository.ScheduleRepository
 import com.example.mobileschedule.ui.schedule.CourseDetailUiState
 import com.example.mobileschedule.ui.schedule.CourseFormState
 import com.example.mobileschedule.ui.theme.CourseColorStore
+import com.example.mobileschedule.ui.today.countdown.CountdownCalculator
+import com.example.mobileschedule.ui.today.countdown.CountdownStore
+import com.example.mobileschedule.ui.today.countdown.CountdownTarget
 import dagger.hilt.android.lifecycle.HiltViewModel
 import java.time.LocalDate
 import java.time.LocalTime
@@ -23,6 +26,8 @@ sealed interface TodayUiState {
         val schedule: TodaySchedule,
         val currentTime: LocalTime,
         val unfinishedTasksByCourse: Map<Long, List<CourseTask>> = emptyMap(),
+        val countdowns: List<CountdownTarget> = emptyList(),
+        val primaryCountdown: CountdownTarget? = null,
     ) : TodayUiState
 }
 
@@ -30,11 +35,15 @@ sealed interface TodayUiState {
 @HiltViewModel
 class TodayViewModel @Inject constructor(
     private val repository: ScheduleRepository,
+    private val countdownStore: CountdownStore,
 ) : ViewModel() {
 
     private val selectedCourseId = MutableStateFlow<Long?>(null)
     private val _formState = MutableStateFlow<CourseFormState>(CourseFormState.Closed)
     val formState: StateFlow<CourseFormState> = _formState.asStateFlow()
+
+    private val _isCountdownSheetVisible = MutableStateFlow(false)
+    val isCountdownSheetVisible: StateFlow<Boolean> = _isCountdownSheetVisible.asStateFlow()
 
     // Periodically tick every 15s to update countdowns and current/upcoming states
     private val tickerFlow = flow {
@@ -48,13 +57,42 @@ class TodayViewModel @Inject constructor(
         .flatMapLatest { now ->
             combine(
                 repository.observeTodaySchedule(LocalDate.now(), now),
-                repository.observeTasksForActiveSemester(unfinishedOnly = true)
-            ) { scheduleResult, tasksResult ->
+                repository.observeTasksForActiveSemester(unfinishedOnly = true),
+                countdownStore.customCountdowns,
+                countdownStore.pinnedId,
+            ) { scheduleResult, tasksResult, customCountdowns, pinnedId ->
                 val taskMap = (tasksResult as? RepoResult.Ok)?.value
                     ?.groupBy { it.courseId } ?: emptyMap()
-                when (scheduleResult) {
-                    is RepoResult.Ok -> TodayUiState.Ready(scheduleResult.value, now, taskMap)
-                    is RepoResult.Err -> TodayUiState.Error("未能读取今日课程")
+                val schedule = (scheduleResult as? RepoResult.Ok)?.value
+                if (schedule != null) {
+                    val (config, semesterName) = when (schedule) {
+                        is TodaySchedule.Ready -> schedule.semester.config to schedule.semester.displayName
+                        is TodaySchedule.BeforeSemester -> schedule.semester.config to schedule.semester.displayName
+                        is TodaySchedule.AfterSemester -> schedule.semester.config to schedule.semester.displayName
+                        is TodaySchedule.ConfigRequired -> schedule.semester.config to schedule.semester.displayName
+                        else -> null to null
+                    }
+                    val today = LocalDate.now()
+                    val allCountdowns = CountdownCalculator.buildAllCountdowns(
+                        today = today,
+                        config = config,
+                        semesterName = semesterName,
+                        customList = customCountdowns,
+                        pinnedId = pinnedId,
+                    )
+                    val primary = allCountdowns.firstOrNull { it.isPinned }
+                        ?: allCountdowns.firstOrNull { !it.isPast }
+                        ?: allCountdowns.firstOrNull()
+
+                    TodayUiState.Ready(
+                        schedule = schedule,
+                        currentTime = now,
+                        unfinishedTasksByCourse = taskMap,
+                        countdowns = allCountdowns,
+                        primaryCountdown = primary,
+                    )
+                } else {
+                    TodayUiState.Error("未能读取今日课程")
                 }
             }
         }
@@ -206,6 +244,26 @@ class TodayViewModel @Inject constructor(
                 is RepoResult.Err -> Unit
             }
         }
+    }
+
+    fun openCountdownSheet() {
+        _isCountdownSheetVisible.value = true
+    }
+
+    fun closeCountdownSheet() {
+        _isCountdownSheetVisible.value = false
+    }
+
+    fun addCustomCountdown(title: String, targetDate: LocalDate, note: String?) {
+        countdownStore.addCustomCountdown(title, targetDate, note)
+    }
+
+    fun deleteCustomCountdown(id: String) {
+        countdownStore.deleteCustomCountdown(id)
+    }
+
+    fun pinCountdown(id: String?) {
+        countdownStore.setPinnedId(id)
     }
 
     private fun formatError(error: DataError): String = when (error.code) {
