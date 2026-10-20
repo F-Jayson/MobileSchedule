@@ -18,6 +18,11 @@ import com.example.mobileschedule.data.updater.AppUpdateChecker
 import com.example.mobileschedule.data.updater.AppUpdateDownloader
 import com.example.mobileschedule.data.updater.DownloadSourceStore
 import com.example.mobileschedule.data.calendar.SystemCalendarSyncManager
+import com.example.mobileschedule.data.cloud.WebDavBackupItem
+import com.example.mobileschedule.data.cloud.WebDavClient
+import com.example.mobileschedule.data.cloud.WebDavConfig
+import com.example.mobileschedule.data.cloud.WebDavConfigStore
+import com.example.mobileschedule.data.cloud.WebDavSyncManager
 import com.example.mobileschedule.ui.widget.ScheduleWidgetNotifier
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
@@ -49,6 +54,8 @@ class SettingsHomeViewModel @Inject constructor(
     @param:ApplicationContext private val context: Context,
     private val management: ScheduleManagementService,
     private val calendarSyncManager: SystemCalendarSyncManager = SystemCalendarSyncManager(context),
+    val webDavConfigStore: WebDavConfigStore = WebDavConfigStore(context),
+    val webDavSyncManager: WebDavSyncManager = WebDavSyncManager(WebDavClient(), webDavConfigStore, management),
 ) : ViewModel() {
     val state: StateFlow<SettingsHomeUiState> = combine(
         repository.observeSemesters(), repository.observeActiveSemester(),
@@ -106,6 +113,111 @@ class SettingsHomeViewModel @Inject constructor(
     }
 
     val themeMode: StateFlow<AppThemeMode> = preferences.themeModeFlow
+
+    // WebDAV Cloud Sync
+    val webDavConfig: StateFlow<WebDavConfig> = webDavConfigStore.configFlow
+    private val mutableWebDavBackups = MutableStateFlow<List<WebDavBackupItem>>(emptyList())
+    val webDavBackups: StateFlow<List<WebDavBackupItem>> = mutableWebDavBackups.asStateFlow()
+    private val mutableIsWebDavTesting = MutableStateFlow(false)
+    val isWebDavTesting: StateFlow<Boolean> = mutableIsWebDavTesting.asStateFlow()
+    private val mutableIsWebDavSyncing = MutableStateFlow(false)
+    val isWebDavSyncing: StateFlow<Boolean> = mutableIsWebDavSyncing.asStateFlow()
+    private val mutableWebDavStatusMessage = MutableStateFlow<String?>(null)
+    val webDavStatusMessage: StateFlow<String?> = mutableWebDavStatusMessage.asStateFlow()
+    private val mutableWebDavErrorMessage = MutableStateFlow<String?>(null)
+    val webDavErrorMessage: StateFlow<String?> = mutableWebDavErrorMessage.asStateFlow()
+
+    init {
+        if (webDavConfigStore.getConfig().isConfigured) {
+            refreshWebDavBackups()
+        }
+    }
+
+    fun saveWebDavConfig(config: WebDavConfig) {
+        webDavConfigStore.saveConfig(config)
+        mutableWebDavStatusMessage.value = "WebDAV 配置已保存"
+        mutableWebDavErrorMessage.value = null
+        if (config.isConfigured) {
+            refreshWebDavBackups()
+        }
+    }
+
+    fun testWebDavConnection(config: WebDavConfig) {
+        if (mutableIsWebDavTesting.value) return
+        mutableIsWebDavTesting.value = true
+        mutableWebDavStatusMessage.value = null
+        mutableWebDavErrorMessage.value = null
+        viewModelScope.launch {
+            val result = webDavSyncManager.testConnection(config)
+            mutableIsWebDavTesting.value = false
+            result.onSuccess {
+                webDavConfigStore.saveConfig(config)
+                mutableWebDavStatusMessage.value = "WebDAV 连接成功，备份目录已就绪"
+                refreshWebDavBackups()
+            }.onFailure { err ->
+                mutableWebDavErrorMessage.value = err.localizedMessage ?: "连接失败，请检查配置"
+            }
+        }
+    }
+
+    fun backupSemesterToWebDav(semesterId: Long) {
+        if (mutableIsWebDavSyncing.value) return
+        mutableIsWebDavSyncing.value = true
+        mutableWebDavStatusMessage.value = null
+        mutableWebDavErrorMessage.value = null
+        viewModelScope.launch {
+            val result = webDavSyncManager.backupSemester(semesterId)
+            mutableIsWebDavSyncing.value = false
+            result.onSuccess { item ->
+                mutableWebDavStatusMessage.value = "已成功上传至云端: ${item.fileName}"
+                refreshWebDavBackups()
+            }.onFailure { err ->
+                mutableWebDavErrorMessage.value = err.localizedMessage ?: "备份上传失败，请重试"
+            }
+        }
+    }
+
+    fun refreshWebDavBackups() {
+        viewModelScope.launch {
+            val result = webDavSyncManager.listCloudBackups()
+            result.onSuccess { list ->
+                mutableWebDavBackups.value = list
+            }.onFailure { err ->
+                if (!mutableIsWebDavTesting.value) {
+                    mutableWebDavErrorMessage.value = err.localizedMessage ?: "拉取云端备份列表失败"
+                }
+            }
+        }
+    }
+
+    fun restoreFromWebDav(item: WebDavBackupItem) {
+        if (mutableIsWebDavSyncing.value) return
+        mutableIsWebDavSyncing.value = true
+        mutableWebDavStatusMessage.value = null
+        mutableWebDavErrorMessage.value = null
+        viewModelScope.launch {
+            val result = webDavSyncManager.downloadAndPreparePreview(item)
+            mutableIsWebDavSyncing.value = false
+            result.onSuccess { preview ->
+                mutableImportPreview.value = preview
+                mutableWebDavStatusMessage.value = "已下载“${item.semesterName}”云端备份，请确认导入"
+            }.onFailure { err ->
+                mutableWebDavErrorMessage.value = err.localizedMessage ?: "下载备份失败"
+            }
+        }
+    }
+
+    fun deleteWebDavBackup(item: WebDavBackupItem) {
+        viewModelScope.launch {
+            val result = webDavSyncManager.deleteCloudBackup(item)
+            result.onSuccess {
+                mutableWebDavStatusMessage.value = "已删除云端备份: ${item.fileName}"
+                refreshWebDavBackups()
+            }.onFailure { err ->
+                mutableWebDavErrorMessage.value = err.localizedMessage ?: "删除失败"
+            }
+        }
+    }
 
     fun setThemeMode(mode: AppThemeMode) {
         viewModelScope.launch {

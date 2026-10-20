@@ -21,6 +21,8 @@ import androidx.compose.foundation.selection.selectable
 import android.Manifest
 import androidx.compose.ui.platform.LocalContext
 import com.example.mobileschedule.data.calendar.SystemCalendarSyncManager
+import com.example.mobileschedule.data.cloud.WebDavBackupItem
+import com.example.mobileschedule.data.cloud.WebDavConfig
 import com.example.mobileschedule.data.model.Semester
 import com.example.mobileschedule.data.model.SemesterImportPreview
 
@@ -37,6 +39,12 @@ fun ScheduleManagementRoute(
     val message by viewModel.actionMessage.collectAsStateWithLifecycle()
     val busy by viewModel.managing.collectAsStateWithLifecycle()
     val importPreview by viewModel.importPreview.collectAsStateWithLifecycle()
+    val webDavConfig by viewModel.webDavConfig.collectAsStateWithLifecycle()
+    val webDavBackups by viewModel.webDavBackups.collectAsStateWithLifecycle()
+    val isWebDavTesting by viewModel.isWebDavTesting.collectAsStateWithLifecycle()
+    val isWebDavSyncing by viewModel.isWebDavSyncing.collectAsStateWithLifecycle()
+    val webDavStatusMessage by viewModel.webDavStatusMessage.collectAsStateWithLifecycle()
+    val webDavErrorMessage by viewModel.webDavErrorMessage.collectAsStateWithLifecycle()
     var exportSemesterId by rememberSaveable { mutableStateOf<Long?>(null) }
     val exporter = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/json")) { uri ->
         val semesterId = exportSemesterId
@@ -125,6 +133,18 @@ fun ScheduleManagementRoute(
         importPreview = importPreview,
         onConfirmImport = viewModel::confirmImportJson,
         onDismissImport = viewModel::dismissImportDialog,
+        webDavConfig = webDavConfig,
+        webDavBackups = webDavBackups,
+        isWebDavTesting = isWebDavTesting,
+        isWebDavSyncing = isWebDavSyncing,
+        webDavStatusMessage = webDavStatusMessage,
+        webDavErrorMessage = webDavErrorMessage,
+        onSaveWebDavConfig = viewModel::saveWebDavConfig,
+        onTestWebDavConnection = viewModel::testWebDavConnection,
+        onBackupSemesterToWebDav = viewModel::backupSemesterToWebDav,
+        onRestoreFromWebDav = viewModel::restoreFromWebDav,
+        onDeleteWebDavBackup = viewModel::deleteWebDavBackup,
+        onRefreshWebDavBackups = viewModel::refreshWebDavBackups,
     )
 }
 
@@ -150,9 +170,22 @@ fun ScheduleManagementScreen(
     importPreview: SemesterImportPreview? = null,
     onConfirmImport: (SemesterImportPreview, Boolean) -> Unit = { _, _ -> },
     onDismissImport: () -> Unit = {},
+    webDavConfig: WebDavConfig = WebDavConfig(),
+    webDavBackups: List<WebDavBackupItem> = emptyList(),
+    isWebDavTesting: Boolean = false,
+    isWebDavSyncing: Boolean = false,
+    webDavStatusMessage: String? = null,
+    webDavErrorMessage: String? = null,
+    onSaveWebDavConfig: (WebDavConfig) -> Unit = {},
+    onTestWebDavConnection: (WebDavConfig) -> Unit = {},
+    onBackupSemesterToWebDav: (Long) -> Unit = {},
+    onRestoreFromWebDav: (WebDavBackupItem) -> Unit = {},
+    onDeleteWebDavBackup: (WebDavBackupItem) -> Unit = {},
+    onRefreshWebDavBackups: () -> Unit = {},
 ) {
     var clearing by remember { mutableStateOf<Semester?>(null) }
     var deleting by remember { mutableStateOf<Semester?>(null) }
+    var showWebDavDialog by rememberSaveable { mutableStateOf(false) }
     deleting?.let { semester ->
         val activeHint = if (state is SettingsHomeUiState.Ready && state.activeId == semester.id) {
             "当前学期删除后，将切换到最近新建的其他学期；没有其他学期时显示空课表。"
@@ -317,6 +350,12 @@ fun ScheduleManagementScreen(
                 }
             }
             item {
+                WebDavSyncCard(
+                    isConfigured = webDavConfig.isConfigured,
+                    onOpenSync = { showWebDavDialog = true },
+                )
+            }
+            item {
                 Surface(
                     shape = RoundedCornerShape(14.dp),
                     color = MaterialTheme.colorScheme.surfaceContainer,
@@ -410,5 +449,28 @@ fun ScheduleManagementScreen(
                 }
             }
         }
+    }
+
+    if (showWebDavDialog) {
+        val activeId = (state as? SettingsHomeUiState.Ready)?.activeId
+        WebDavSyncDialog(
+            config = webDavConfig,
+            backups = webDavBackups,
+            isTesting = isWebDavTesting,
+            isSyncing = isWebDavSyncing,
+            statusMessage = webDavStatusMessage,
+            errorMessage = webDavErrorMessage,
+            activeSemesterId = activeId,
+            onDismiss = { showWebDavDialog = false },
+            onSaveConfig = onSaveWebDavConfig,
+            onTestConnection = onTestWebDavConnection,
+            onBackupSemester = onBackupSemesterToWebDav,
+            onRestoreBackup = { item ->
+                showWebDavDialog = false
+                onRestoreFromWebDav(item)
+            },
+            onDeleteBackup = onDeleteWebDavBackup,
+            onRefreshList = onRefreshWebDavBackups,
+        )
     }
 }
