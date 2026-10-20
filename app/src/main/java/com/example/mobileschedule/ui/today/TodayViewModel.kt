@@ -22,6 +22,7 @@ sealed interface TodayUiState {
     data class Ready(
         val schedule: TodaySchedule,
         val currentTime: LocalTime,
+        val unfinishedTasksByCourse: Map<Long, List<CourseTask>> = emptyMap(),
     ) : TodayUiState
 }
 
@@ -45,9 +46,14 @@ class TodayViewModel @Inject constructor(
 
     val uiState: StateFlow<TodayUiState> = tickerFlow
         .flatMapLatest { now ->
-            repository.observeTodaySchedule(LocalDate.now(), now).map { result ->
-                when (result) {
-                    is RepoResult.Ok -> TodayUiState.Ready(result.value, now)
+            combine(
+                repository.observeTodaySchedule(LocalDate.now(), now),
+                repository.observeTasksForActiveSemester(unfinishedOnly = true)
+            ) { scheduleResult, tasksResult ->
+                val taskMap = (tasksResult as? RepoResult.Ok)?.value
+                    ?.groupBy { it.courseId } ?: emptyMap()
+                when (scheduleResult) {
+                    is RepoResult.Ok -> TodayUiState.Ready(scheduleResult.value, now, taskMap)
                     is RepoResult.Err -> TodayUiState.Error("未能读取今日课程")
                 }
             }
@@ -57,20 +63,28 @@ class TodayViewModel @Inject constructor(
 
     val detailState: StateFlow<CourseDetailUiState> = selectedCourseId.flatMapLatest { id ->
         if (id == null) flowOf(CourseDetailUiState.Closed)
-        else repository.observeCourseDetail(id).flatMapLatest { result ->
-            when (result) {
-                is RepoResult.Err -> flowOf(CourseDetailUiState.Error)
-                is RepoResult.Ok -> {
-                    val detail = result.value
-                    if (detail == null) flowOf(CourseDetailUiState.Missing)
-                    else {
-                        val scope = (detail.arrangement.origin as? CourseOrigin.SchoolImport)?.scope
-                        if (scope == null) flowOf(CourseDetailUiState.Ready(detail, null))
-                        else repository.observeImportStatus(detail.arrangement.semesterId).map { status ->
-                            val label = (status as? RepoResult.Ok)?.value?.sources
-                                ?.firstOrNull { it.scope == scope }?.sourceTermLabel
-                                ?.takeIf(String::isNotBlank) ?: scope.sourceTermId
-                            CourseDetailUiState.Ready(detail, label)
+        else {
+            combine(
+                repository.observeCourseDetail(id),
+                repository.observeTasksForCourse(id)
+            ) { courseResult, tasksResult ->
+                courseResult to tasksResult
+            }.flatMapLatest { (result, tasksResult) ->
+                when (result) {
+                    is RepoResult.Err -> flowOf(CourseDetailUiState.Error)
+                    is RepoResult.Ok -> {
+                        val detail = result.value
+                        val tasks = (tasksResult as? RepoResult.Ok)?.value ?: emptyList()
+                        if (detail == null) flowOf(CourseDetailUiState.Missing)
+                        else {
+                            val scope = (detail.arrangement.origin as? CourseOrigin.SchoolImport)?.scope
+                            if (scope == null) flowOf(CourseDetailUiState.Ready(detail, null, tasks))
+                            else repository.observeImportStatus(detail.arrangement.semesterId).map { status ->
+                                val label = (status as? RepoResult.Ok)?.value?.sources
+                                    ?.firstOrNull { it.scope == scope }?.sourceTermLabel
+                                    ?.takeIf(String::isNotBlank) ?: scope.sourceTermId
+                                CourseDetailUiState.Ready(detail, label, tasks)
+                            }
                         }
                     }
                 }
@@ -85,6 +99,32 @@ class TodayViewModel @Inject constructor(
 
     fun closeCourseDetail() {
         selectedCourseId.value = null
+    }
+
+    fun createTask(courseId: Long, title: String, content: String?, deadlineEpochMillis: Long, type: CourseTaskType) {
+        viewModelScope.launch {
+            repository.createTask(
+                CourseTask(
+                    courseId = courseId,
+                    title = title,
+                    content = content,
+                    deadlineEpochMillis = deadlineEpochMillis,
+                    type = type,
+                )
+            )
+        }
+    }
+
+    fun toggleTaskCompletion(taskId: Long, isCompleted: Boolean) {
+        viewModelScope.launch {
+            repository.updateTaskCompletion(taskId, isCompleted)
+        }
+    }
+
+    fun deleteTask(taskId: Long) {
+        viewModelScope.launch {
+            repository.deleteTask(taskId)
+        }
     }
 
     fun openEditCourse(arrangement: CourseArrangement, config: SemesterConfig) {

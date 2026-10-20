@@ -17,9 +17,11 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.layout.width
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.Checkbox
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilledTonalButton
@@ -39,15 +41,24 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextDecoration
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.mobileschedule.data.model.CourseArrangement
 import com.example.mobileschedule.data.model.CourseOrigin
+import com.example.mobileschedule.data.model.CourseTask
+import com.example.mobileschedule.data.model.CourseTaskType
 import com.example.mobileschedule.data.rules.CourseSlotState
 import com.example.mobileschedule.data.rules.ScheduleRules
+import com.example.mobileschedule.ui.schedule.task.CourseTaskDialog
 import com.example.mobileschedule.ui.theme.CourseColorTheme
 import com.example.mobileschedule.ui.theme.LocalIsDarkTheme
+import java.time.Instant
+import java.time.LocalDateTime
+import java.time.ZoneId
 import java.time.format.DateTimeFormatter
+import java.time.temporal.ChronoUnit
 
 private val detailTimeFormat = DateTimeFormatter.ofPattern("HH:mm")
 private val detailWeekdays = listOf("周一", "周二", "周三", "周四", "周五", "周六", "周日")
@@ -61,9 +72,13 @@ internal fun CourseDetailSheet(
     onEditCourse: (CourseArrangement) -> Unit = {},
     onDeleteCourse: (Long) -> Unit = {},
     onCopyCourse: (CourseArrangement) -> Unit = {},
+    onCreateTask: (title: String, content: String?, deadlineEpochMillis: Long, type: CourseTaskType) -> Unit = { _, _, _, _ -> },
+    onToggleTaskCompletion: (taskId: Long, isCompleted: Boolean) -> Unit = { _, _ -> },
+    onDeleteTask: (taskId: Long) -> Unit = {},
 ) {
     if (state == CourseDetailUiState.Closed) return
     var showDeleteDialog by remember { mutableStateOf(false) }
+    var showAddTaskDialog by remember { mutableStateOf(false) }
     ModalBottomSheet(
         onDismissRequest = onDismiss,
         sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
@@ -251,6 +266,77 @@ internal fun CourseDetailSheet(
                                 }
                             }
                         }
+
+                        // 待办与日程卡片
+                        Surface(
+                            shape = RoundedCornerShape(18.dp),
+                            color = MaterialTheme.colorScheme.surfaceContainerLow,
+                            modifier = Modifier.fillMaxWidth().testTag("detail_tasks_section"),
+                        ) {
+                            Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                                Row(
+                                    Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically,
+                                ) {
+                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                        Text(
+                                            "待办与日程",
+                                            style = MaterialTheme.typography.titleMedium,
+                                            fontWeight = FontWeight.Bold,
+                                            color = MaterialTheme.colorScheme.onSurface,
+                                        )
+                                        val uncompletedCount = state.tasks.count { !it.isCompleted }
+                                        if (uncompletedCount > 0) {
+                                            Spacer(Modifier.width(8.dp))
+                                            Surface(
+                                                shape = RoundedCornerShape(10.dp),
+                                                color = MaterialTheme.colorScheme.errorContainer,
+                                            ) {
+                                                Text(
+                                                    "$uncompletedCount 待办",
+                                                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
+                                                    style = MaterialTheme.typography.labelSmall,
+                                                    color = MaterialTheme.colorScheme.onErrorContainer,
+                                                    fontWeight = FontWeight.Bold,
+                                                )
+                                            }
+                                        }
+                                    }
+                                    TextButton(
+                                        onClick = { showAddTaskDialog = true },
+                                        modifier = Modifier.testTag("detail_add_task"),
+                                    ) {
+                                        Text("+ 添加", fontWeight = FontWeight.Bold)
+                                    }
+                                }
+
+                                if (state.tasks.isEmpty()) {
+                                    Surface(
+                                        shape = RoundedCornerShape(12.dp),
+                                        color = MaterialTheme.colorScheme.surfaceContainerHighest.copy(alpha = 0.5f),
+                                        modifier = Modifier.fillMaxWidth().testTag("detail_tasks_empty"),
+                                    ) {
+                                        Text(
+                                            "暂无课程待办或考试，点击右上角添加",
+                                            modifier = Modifier.padding(14.dp),
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        )
+                                    }
+                                } else {
+                                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                                        state.tasks.forEach { task ->
+                                            TaskItemRow(
+                                                task = task,
+                                                onToggle = { isChecked -> onToggleTaskCompletion(task.id, isChecked) },
+                                                onDelete = { onDeleteTask(task.id) },
+                                            )
+                                        }
+                                    }
+                                }
+                            }
+                        }
                     }
                 }
             }
@@ -333,6 +419,16 @@ internal fun CourseDetailSheet(
                         modifier = Modifier.testTag("delete_course_dialog"),
                     )
                 }
+                if (showAddTaskDialog) {
+                    CourseTaskDialog(
+                        courseName = course.name,
+                        onDismiss = { showAddTaskDialog = false },
+                        onConfirm = { title, content, deadline, type ->
+                            onCreateTask(title, content, deadline, type)
+                            showAddTaskDialog = false
+                        },
+                    )
+                }
             }
 
             FilledTonalButton(
@@ -361,4 +457,140 @@ private fun DetailLine(text: String, tag: String, isHighlight: Boolean = false) 
         color = if (isHighlight) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurfaceVariant,
         style = if (isHighlight) MaterialTheme.typography.bodyLarge else MaterialTheme.typography.bodyMedium,
     )
+}
+
+@Composable
+private fun TaskItemRow(
+    task: CourseTask,
+    onToggle: (Boolean) -> Unit,
+    onDelete: () -> Unit,
+) {
+    val (deadlineText, isUrgent) = remember(task.deadlineEpochMillis, task.isCompleted) {
+        formatTaskDeadline(task.deadlineEpochMillis, task.isCompleted)
+    }
+
+    Surface(
+        shape = RoundedCornerShape(12.dp),
+        color = if (task.isCompleted) {
+            MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0.5f)
+        } else {
+            MaterialTheme.colorScheme.surfaceContainerHigh
+        },
+        border = if (isUrgent) BorderStroke(1.dp, MaterialTheme.colorScheme.error.copy(alpha = 0.6f)) else null,
+        modifier = Modifier
+            .fillMaxWidth()
+            .testTag("task_item_${task.id}")
+    ) {
+        Row(
+            Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 8.dp, vertical = 6.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Checkbox(
+                checked = task.isCompleted,
+                onCheckedChange = onToggle,
+                modifier = Modifier.testTag("task_checkbox_${task.id}"),
+            )
+            Column(
+                Modifier
+                    .weight(1f)
+                    .padding(horizontal = 4.dp),
+                verticalArrangement = Arrangement.spacedBy(2.dp),
+            ) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                ) {
+                    val (typeLabel, typeBgColor, typeTextColor) = when (task.type) {
+                        CourseTaskType.HOMEWORK -> Triple("作业", MaterialTheme.colorScheme.primaryContainer, MaterialTheme.colorScheme.onPrimaryContainer)
+                        CourseTaskType.EXAM -> Triple("考试", MaterialTheme.colorScheme.errorContainer, MaterialTheme.colorScheme.onErrorContainer)
+                        CourseTaskType.EXPERIMENT -> Triple("实验", MaterialTheme.colorScheme.tertiaryContainer, MaterialTheme.colorScheme.onTertiaryContainer)
+                        CourseTaskType.CUSTOM -> Triple("其他", MaterialTheme.colorScheme.secondaryContainer, MaterialTheme.colorScheme.onSecondaryContainer)
+                    }
+                    Surface(
+                        shape = RoundedCornerShape(4.dp),
+                        color = typeBgColor,
+                    ) {
+                        Text(
+                            text = typeLabel,
+                            style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp),
+                            color = typeTextColor,
+                            fontWeight = FontWeight.Bold,
+                            modifier = Modifier.padding(horizontal = 4.dp, vertical = 1.dp)
+                        )
+                    }
+                    Text(
+                        text = task.title,
+                        style = MaterialTheme.typography.bodyMedium.copy(
+                            textDecoration = if (task.isCompleted) TextDecoration.LineThrough else TextDecoration.None
+                        ),
+                        fontWeight = FontWeight.SemiBold,
+                        color = if (task.isCompleted) {
+                            MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
+                        } else {
+                            MaterialTheme.colorScheme.onSurface
+                        },
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.testTag("task_title_${task.id}")
+                    )
+                }
+
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Text(
+                        text = deadlineText,
+                        style = MaterialTheme.typography.bodySmall.copy(fontSize = 11.sp),
+                        color = if (isUrgent) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant,
+                        fontWeight = if (isUrgent) FontWeight.SemiBold else FontWeight.Normal,
+                    )
+                    if (!task.content.isNullOrBlank()) {
+                        Text(
+                            text = task.content,
+                            style = MaterialTheme.typography.bodySmall.copy(fontSize = 11.sp),
+                            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                    }
+                }
+            }
+
+            TextButton(
+                onClick = onDelete,
+                modifier = Modifier.testTag("task_delete_${task.id}")
+            ) {
+                Text(
+                    "删除",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.error.copy(alpha = 0.8f)
+                )
+            }
+        }
+    }
+}
+
+private fun formatTaskDeadline(deadlineEpochMillis: Long, isCompleted: Boolean): Pair<String, Boolean> {
+    val deadline = Instant.ofEpochMilli(deadlineEpochMillis).atZone(ZoneId.systemDefault()).toLocalDateTime()
+    val now = LocalDateTime.now()
+    val today = now.toLocalDate()
+    val deadlineDate = deadline.toLocalDate()
+    val timeStr = deadline.format(DateTimeFormatter.ofPattern("HH:mm"))
+
+    val daysDiff = ChronoUnit.DAYS.between(today, deadlineDate)
+    val isPast = deadline.isBefore(now)
+    val isUrgent = !isCompleted && isPast
+
+    val text = when {
+        isPast && !isCompleted -> "已逾期 · ${deadline.format(DateTimeFormatter.ofPattern("MM-dd HH:mm"))}"
+        daysDiff == 0L -> "今天 $timeStr 截止"
+        daysDiff == 1L -> "明天 $timeStr 截止"
+        daysDiff == 2L -> "后天 $timeStr 截止"
+        daysDiff in 3..7 -> "${daysDiff}天后 $timeStr 截止"
+        else -> "${deadline.format(DateTimeFormatter.ofPattern("MM-dd HH:mm"))} 截止"
+    }
+    return Pair(text, isUrgent)
 }

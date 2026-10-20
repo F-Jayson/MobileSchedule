@@ -12,6 +12,8 @@ import com.example.mobileschedule.data.model.DataErrorCode
 import com.example.mobileschedule.data.model.RepoResult
 import com.example.mobileschedule.data.model.RuleIssueCode
 import com.example.mobileschedule.data.model.WeekPosition
+import com.example.mobileschedule.data.model.CourseTask
+import com.example.mobileschedule.data.model.CourseTaskType
 import com.example.mobileschedule.data.repository.ScheduleRepository
 import com.example.mobileschedule.data.rules.CourseSlotItem
 import com.example.mobileschedule.data.rules.CourseSlotState
@@ -42,6 +44,7 @@ sealed interface ScheduleUiState {
         val week: ActiveWeek,
         val currentPosition: WeekPosition,
         val today: LocalDate,
+        val unfinishedTaskCounts: Map<Long, Int> = emptyMap(),
     ) : ScheduleUiState
     data object Error : ScheduleUiState
 }
@@ -51,7 +54,11 @@ sealed interface CourseDetailUiState {
     data object Loading : CourseDetailUiState
     data object Missing : CourseDetailUiState
     data object Error : CourseDetailUiState
-    data class Ready(val detail: CourseDetail, val sourceTermLabel: String?) : CourseDetailUiState
+    data class Ready(
+        val detail: CourseDetail,
+        val sourceTermLabel: String?,
+        val tasks: List<CourseTask> = emptyList(),
+    ) : CourseDetailUiState
 }
 
 private data class BrowsingWeek(val semesterId: Long, val week: Int)
@@ -88,11 +95,18 @@ class ScheduleViewModel @Inject constructor(private val repository: ScheduleRepo
                             if (selection?.semesterId == semester.id) selection.week.coerceIn(1, semester.config.totalWeeks)
                             else defaultWeek
                         }.flatMapLatest { selectedWeek ->
-                            repository.observeActiveWeek(selectedWeek).map { active ->
+                            combine(
+                                repository.observeActiveWeek(selectedWeek),
+                                repository.observeTasksForActiveSemester(unfinishedOnly = true)
+                            ) { active, tasksResult ->
+                                val taskCounts = (tasksResult as? RepoResult.Ok)?.value
+                                    ?.groupBy { it.courseId }
+                                    ?.mapValues { it.value.size } ?: emptyMap()
                                 when (active) {
                                     is RepoResult.Err -> ScheduleUiState.Error
-                                    is RepoResult.Ok -> active.value?.let { ScheduleUiState.Ready(it, position.value, date) }
-                                        ?: ScheduleUiState.NoSemester
+                                    is RepoResult.Ok -> active.value?.let {
+                                        ScheduleUiState.Ready(it, position.value, date, taskCounts)
+                                    } ?: ScheduleUiState.NoSemester
                                 }
                             }
                         }
@@ -107,20 +121,28 @@ class ScheduleViewModel @Inject constructor(private val repository: ScheduleRepo
 
     val detailState: StateFlow<CourseDetailUiState> = selectedCourseId.flatMapLatest { id ->
         if (id == null) flowOf(CourseDetailUiState.Closed)
-        else repository.observeCourseDetail(id).flatMapLatest { result ->
-            when (result) {
-                is RepoResult.Err -> flowOf(CourseDetailUiState.Error)
-                is RepoResult.Ok -> {
-                    val detail = result.value
-                    if (detail == null) flowOf(CourseDetailUiState.Missing)
-                    else {
-                        val scope = (detail.arrangement.origin as? CourseOrigin.SchoolImport)?.scope
-                        if (scope == null) flowOf(CourseDetailUiState.Ready(detail, null))
-                        else repository.observeImportStatus(detail.arrangement.semesterId).map { status ->
-                            val label = (status as? RepoResult.Ok)?.value?.sources
-                                ?.firstOrNull { it.scope == scope }?.sourceTermLabel
-                                ?.takeIf(String::isNotBlank) ?: scope.sourceTermId
-                            CourseDetailUiState.Ready(detail, label)
+        else {
+            combine(
+                repository.observeCourseDetail(id),
+                repository.observeTasksForCourse(id)
+            ) { courseResult, tasksResult ->
+                courseResult to tasksResult
+            }.flatMapLatest { (result, tasksResult) ->
+                when (result) {
+                    is RepoResult.Err -> flowOf(CourseDetailUiState.Error)
+                    is RepoResult.Ok -> {
+                        val detail = result.value
+                        val tasks = (tasksResult as? RepoResult.Ok)?.value ?: emptyList()
+                        if (detail == null) flowOf(CourseDetailUiState.Missing)
+                        else {
+                            val scope = (detail.arrangement.origin as? CourseOrigin.SchoolImport)?.scope
+                            if (scope == null) flowOf(CourseDetailUiState.Ready(detail, null, tasks))
+                            else repository.observeImportStatus(detail.arrangement.semesterId).map { status ->
+                                val label = (status as? RepoResult.Ok)?.value?.sources
+                                    ?.firstOrNull { it.scope == scope }?.sourceTermLabel
+                                    ?.takeIf(String::isNotBlank) ?: scope.sourceTermId
+                                CourseDetailUiState.Ready(detail, label, tasks)
+                            }
                         }
                     }
                 }
@@ -160,6 +182,32 @@ class ScheduleViewModel @Inject constructor(private val repository: ScheduleRepo
 
     fun showCourseDetail(id: Long) { selectedCourseId.value = id }
     fun closeCourseDetail() { selectedCourseId.value = null }
+
+    fun createTask(courseId: Long, title: String, content: String?, deadlineEpochMillis: Long, type: CourseTaskType) {
+        viewModelScope.launch {
+            repository.createTask(
+                CourseTask(
+                    courseId = courseId,
+                    title = title,
+                    content = content,
+                    deadlineEpochMillis = deadlineEpochMillis,
+                    type = type,
+                )
+            )
+        }
+    }
+
+    fun toggleTaskCompletion(taskId: Long, isCompleted: Boolean) {
+        viewModelScope.launch {
+            repository.updateTaskCompletion(taskId, isCompleted)
+        }
+    }
+
+    fun deleteTask(taskId: Long) {
+        viewModelScope.launch {
+            repository.deleteTask(taskId)
+        }
+    }
 
     fun openCreateCourse() {
         val ready = uiState.value as? ScheduleUiState.Ready ?: return

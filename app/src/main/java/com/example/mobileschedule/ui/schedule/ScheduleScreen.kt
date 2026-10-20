@@ -98,6 +98,7 @@ import com.example.mobileschedule.R
 import com.example.mobileschedule.data.model.ActiveWeek
 import com.example.mobileschedule.data.model.ArrangementDraft
 import com.example.mobileschedule.data.model.CourseArrangement
+import com.example.mobileschedule.data.model.CourseTaskType
 import com.example.mobileschedule.data.model.SemesterConfig
 import com.example.mobileschedule.data.model.WeekSchedule
 import com.example.mobileschedule.ui.theme.CourseColorPalette
@@ -215,6 +216,14 @@ fun ScheduleRoute(
         onSettings = onSettings,
         onImport = onImport,
         onRetry = viewModel::retry,
+        onCreateTask = { title, content, deadline, type ->
+            val courseId = (detailState as? CourseDetailUiState.Ready)?.detail?.arrangement?.id
+            if (courseId != null) {
+                viewModel.createTask(courseId, title, content, deadline, type)
+            }
+        },
+        onToggleTaskCompletion = viewModel::toggleTaskCompletion,
+        onDeleteTask = viewModel::deleteTask,
     )
 }
 
@@ -234,6 +243,9 @@ fun ScheduleScreen(
     onEditCourse: (CourseArrangement) -> Unit = {},
     onCopyCourse: (CourseArrangement) -> Unit = {},
     onDeleteCourse: (Long) -> Unit = {},
+    onCreateTask: (title: String, content: String?, deadlineEpochMillis: Long, type: CourseTaskType) -> Unit = { _, _, _, _ -> },
+    onToggleTaskCompletion: (taskId: Long, isCompleted: Boolean) -> Unit = { _, _ -> },
+    onDeleteTask: (taskId: Long) -> Unit = {},
     onDismissForm: () -> Unit = {},
     onSaveCourse: (ArrangementDraft, Int?) -> Unit = { _, _ -> },
     onCheckConflict: suspend (ArrangementDraft, Long?) -> List<CourseArrangement> = { _, _ -> emptyList() },
@@ -292,6 +304,7 @@ fun ScheduleScreen(
                     WeekScheduleGrid(
                         state.week, state.today, onCourseClick,
                         displayOptions = displayOptions,
+                        unfinishedTaskCounts = state.unfinishedTaskCounts,
                         onWeekTitleClick = { showWeekPicker = true },
                         onPreviousWeek = onPreviousWeek, onNextWeek = onNextWeek,
                     )
@@ -315,6 +328,9 @@ fun ScheduleScreen(
         onEditCourse = onEditCourse,
         onDeleteCourse = onDeleteCourse,
         onCopyCourse = onCopyCourse,
+        onCreateTask = onCreateTask,
+        onToggleTaskCompletion = onToggleTaskCompletion,
+        onDeleteTask = onDeleteTask,
     )
     CourseFormSheet(
         formState = formState,
@@ -385,6 +401,7 @@ fun WeekScheduleGrid(
     today: LocalDate = LocalDate.now(),
     onCourseClick: (Long) -> Unit = {},
     displayOptions: ScheduleDisplayOptions = ScheduleDisplayOptions(),
+    unfinishedTaskCounts: Map<Long, Int> = emptyMap(),
     onWeekTitleClick: () -> Unit = {},
     onPreviousWeek: () -> Unit = {},
     onNextWeek: () -> Unit = {},
@@ -660,6 +677,7 @@ fun WeekScheduleGrid(
                             gridWidth = gridWidth,
                             gridHeight = gridHeight,
                             displayOptions = displayOptions,
+                            unfinishedTaskCounts = unfinishedTaskCounts,
                             isCurrentPage = true,
                             onCourseClick = onCourseClick,
                             onOverlappingClick = { overlappingCourses = it },
@@ -678,6 +696,7 @@ fun WeekScheduleGrid(
                                 gridWidth = gridWidth,
                                 gridHeight = gridHeight,
                                 displayOptions = displayOptions,
+                                unfinishedTaskCounts = unfinishedTaskCounts,
                                 isCurrentPage = false,
                                 onCourseClick = onCourseClick,
                                 onOverlappingClick = { overlappingCourses = it },
@@ -697,6 +716,7 @@ fun WeekScheduleGrid(
                                 gridWidth = gridWidth,
                                 gridHeight = gridHeight,
                                 displayOptions = displayOptions,
+                                unfinishedTaskCounts = unfinishedTaskCounts,
                                 isCurrentPage = false,
                                 onCourseClick = onCourseClick,
                                 onOverlappingClick = { overlappingCourses = it },
@@ -824,6 +844,7 @@ private fun WeekScheduleContent(
     gridWidth: Dp,
     gridHeight: Dp,
     displayOptions: ScheduleDisplayOptions,
+    unfinishedTaskCounts: Map<Long, Int> = emptyMap(),
     isCurrentPage: Boolean,
     onCourseClick: (Long) -> Unit,
     onOverlappingClick: (List<CourseArrangement>) -> Unit,
@@ -863,6 +884,7 @@ private fun WeekScheduleContent(
                                 lane = lane,
                                 laneCount = 2,
                                 displayOptions = displayOptions,
+                                unfinishedTaskCount = unfinishedTaskCounts[course.id] ?: 0,
                                 enableTag = isCurrentPage,
                                 onClick = {
                                     val state = ScheduleRules.determineCourseSlotState(schedule.week, course.weeks)
@@ -881,6 +903,7 @@ private fun WeekScheduleContent(
                             dayWidth = dayWidth,
                             rowHeight = rowHeight,
                             displayOptions = displayOptions,
+                            unfinishedTaskCount = slot.arrangements.singleOrNull()?.let { unfinishedTaskCounts[it.id] } ?: 0,
                             enableTag = isCurrentPage,
                             onClick = {
                                 val course = slot.arrangements.singleOrNull()
@@ -967,6 +990,7 @@ private fun WeekGridCard(
     laneCount: Int = 1,
     currentWeek: Int = 1,
     displayOptions: ScheduleDisplayOptions = ScheduleDisplayOptions(),
+    unfinishedTaskCount: Int = 0,
     enableTag: Boolean = true,
 ) {
     val course = slot.arrangements.singleOrNull()
@@ -1051,70 +1075,92 @@ private fun WeekGridCard(
             contentColor = palette.onContainer,
         ),
     ) {
-        Column(
-            Modifier
-                .fillMaxSize()
-                .padding(horizontal = 4.dp, vertical = 3.dp),
-        ) {
-            if (course == null) {
-                Text(
-                    "此时段有${slot.arrangements.size}门课程",
-                    maxLines = 2,
-                    overflow = TextOverflow.Ellipsis,
-                    fontWeight = FontWeight.Bold,
-                    color = palette.onContainer,
-                    style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp, lineHeight = 12.sp),
-                )
-                Text(
-                    "点击查看",
-                    color = palette.secondaryText,
-                    style = MaterialTheme.typography.labelSmall.copy(fontSize = 9.sp),
-                )
-            } else {
-                if (isInactive) {
+        Box(Modifier.fillMaxSize()) {
+            Column(
+                Modifier
+                    .fillMaxSize()
+                    .padding(horizontal = 4.dp, vertical = 3.dp),
+            ) {
+                if (course == null) {
                     Text(
-                        "非本周",
-                        maxLines = 1,
-                        fontWeight = FontWeight.Bold,
-                        color = palette.secondaryText,
-                        style = MaterialTheme.typography.labelSmall.copy(fontSize = 8.sp, lineHeight = 10.sp),
-                        modifier = Modifier.testTag("inactive_badge_${course.id}"),
-                    )
-                }
-                Text(
-                    course.name,
-                    maxLines = if (displayOptions.showFullCourseName) Int.MAX_VALUE else 3,
-                    overflow = if (displayOptions.showFullCourseName) TextOverflow.Clip else TextOverflow.Ellipsis,
-                    fontWeight = FontWeight.SemiBold,
-                    color = palette.onContainer,
-                    style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp, lineHeight = 12.sp),
-                )
-                if (displayOptions.showLocation) {
-                    Text(
-                        course.location ?: "地点未提供",
+                        "此时段有${slot.arrangements.size}门课程",
                         maxLines = 2,
                         overflow = TextOverflow.Ellipsis,
-                        color = palette.secondaryText,
-                        style = MaterialTheme.typography.labelSmall.copy(fontSize = 9.sp, lineHeight = 11.sp),
+                        fontWeight = FontWeight.Bold,
+                        color = palette.onContainer,
+                        style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp, lineHeight = 12.sp),
                     )
-                }
-                if (displayOptions.showTeacher) {
                     Text(
-                        course.teacher ?: "教师未提供",
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
+                        "点击查看",
                         color = palette.secondaryText,
                         style = MaterialTheme.typography.labelSmall.copy(fontSize = 9.sp),
                     )
-                }
-                if (laneCount > 1) {
+                } else {
+                    if (isInactive) {
+                        Text(
+                            "非本周",
+                            maxLines = 1,
+                            fontWeight = FontWeight.Bold,
+                            color = palette.secondaryText,
+                            style = MaterialTheme.typography.labelSmall.copy(fontSize = 8.sp, lineHeight = 10.sp),
+                            modifier = Modifier.testTag("inactive_badge_${course.id}"),
+                        )
+                    }
                     Text(
-                        "时间重叠",
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                        color = MaterialTheme.colorScheme.error,
-                        fontWeight = FontWeight.Medium,
-                        style = MaterialTheme.typography.labelSmall.copy(fontSize = 9.sp),
+                        course.name,
+                        maxLines = if (displayOptions.showFullCourseName) Int.MAX_VALUE else 3,
+                        overflow = if (displayOptions.showFullCourseName) TextOverflow.Clip else TextOverflow.Ellipsis,
+                        fontWeight = FontWeight.SemiBold,
+                        color = palette.onContainer,
+                        style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp, lineHeight = 12.sp),
+                    )
+                    if (displayOptions.showLocation) {
+                        Text(
+                            course.location ?: "地点未提供",
+                            maxLines = 2,
+                            overflow = TextOverflow.Ellipsis,
+                            color = palette.secondaryText,
+                            style = MaterialTheme.typography.labelSmall.copy(fontSize = 9.sp, lineHeight = 11.sp),
+                        )
+                    }
+                    if (displayOptions.showTeacher) {
+                        Text(
+                            course.teacher ?: "教师未提供",
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            color = palette.secondaryText,
+                            style = MaterialTheme.typography.labelSmall.copy(fontSize = 9.sp),
+                        )
+                    }
+                    if (laneCount > 1) {
+                        Text(
+                            "时间重叠",
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            color = MaterialTheme.colorScheme.error,
+                            fontWeight = FontWeight.Medium,
+                            style = MaterialTheme.typography.labelSmall.copy(fontSize = 9.sp),
+                        )
+                    }
+                }
+            }
+            if (unfinishedTaskCount > 0 && course != null) {
+                Surface(
+                    shape = RoundedCornerShape(topEnd = 8.dp, bottomStart = 6.dp),
+                    color = MaterialTheme.colorScheme.error,
+                    modifier = Modifier
+                        .align(Alignment.TopEnd)
+                        .testTag("task_badge_${course.id}"),
+                ) {
+                    Text(
+                        text = if (unfinishedTaskCount > 9) "9+" else "$unfinishedTaskCount",
+                        color = MaterialTheme.colorScheme.onError,
+                        fontSize = 8.sp,
+                        fontWeight = FontWeight.Bold,
+                        lineHeight = 10.sp,
+                        modifier = Modifier
+                            .testTag("task_badge_text_${course.id}")
+                            .padding(horizontal = 4.dp, vertical = 1.dp)
                     )
                 }
             }

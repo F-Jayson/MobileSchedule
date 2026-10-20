@@ -33,8 +33,11 @@ import com.example.mobileschedule.ui.schedule.CourseFormState
 import com.example.mobileschedule.ui.theme.CourseColorStore
 import com.example.mobileschedule.ui.theme.CourseColorTheme
 import com.example.mobileschedule.ui.theme.LocalIsDarkTheme
+import java.time.Instant
 import java.time.LocalDate
+import java.time.LocalDateTime
 import java.time.LocalTime
+import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import java.time.temporal.ChronoUnit
 import kotlinx.coroutines.launch
@@ -79,6 +82,14 @@ fun TodayRoute(
         onDeleteCourse = { arrangementId ->
             viewModel.deleteCourse(arrangementId)
         },
+        onCreateTask = { title, content, deadline, type ->
+            val courseId = (detailState as? CourseDetailUiState.Ready)?.detail?.arrangement?.id
+            if (courseId != null) {
+                viewModel.createTask(courseId, title, content, deadline, type)
+            }
+        },
+        onToggleTaskCompletion = viewModel::toggleTaskCompletion,
+        onDeleteTask = viewModel::deleteTask,
     )
 
     // Course Form Sheet for Editing or Copying
@@ -128,6 +139,7 @@ fun TodayScreen(
                 TodayContent(
                     schedule = state.schedule,
                     currentTime = state.currentTime,
+                    unfinishedTasksByCourse = state.unfinishedTasksByCourse,
                     onCourseClick = onCourseClick,
                     onConfigure = onConfigure,
                     onSettings = onSettings,
@@ -142,6 +154,7 @@ fun TodayScreen(
 private fun TodayContent(
     schedule: TodaySchedule,
     currentTime: LocalTime,
+    unfinishedTasksByCourse: Map<Long, List<CourseTask>> = emptyMap(),
     onCourseClick: (Long) -> Unit,
     onConfigure: () -> Unit,
     onSettings: () -> Unit,
@@ -191,6 +204,7 @@ private fun TodayContent(
                 TodayReadyScheduleView(
                     schedule = schedule,
                     currentTime = currentTime,
+                    unfinishedTasksByCourse = unfinishedTasksByCourse,
                     onCourseClick = onCourseClick,
                 )
             }
@@ -251,6 +265,7 @@ private fun TodaySimpleHeader(date: LocalDate, subtitle: String) {
 private fun TodayReadyScheduleView(
     schedule: TodaySchedule.Ready,
     currentTime: LocalTime,
+    unfinishedTasksByCourse: Map<Long, List<CourseTask>> = emptyMap(),
     onCourseClick: (Long) -> Unit,
 ) {
     val dateText = schedule.date.format(DateTimeFormatter.ofPattern("M月d日"))
@@ -345,6 +360,7 @@ private fun TodayReadyScheduleView(
                 TodayCourseCard(
                     item = item,
                     currentTime = currentTime,
+                    tasks = unfinishedTasksByCourse[item.arrangement.id] ?: emptyList(),
                     onClick = { onCourseClick(item.arrangement.id) },
                 )
             }
@@ -465,6 +481,7 @@ private fun TodayStatusSummaryBanner(courses: List<TodayCourseItem>, currentTime
 private fun TodayCourseCard(
     item: TodayCourseItem,
     currentTime: LocalTime,
+    tasks: List<CourseTask> = emptyList(),
     onClick: () -> Unit,
 ) {
     val arrangement = item.arrangement
@@ -592,8 +609,66 @@ private fun TodayCourseCard(
                     color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
                 )
             }
+
+            // Pending task deadline notice
+            val urgentTask = tasks.filter { !it.isCompleted }.minByOrNull { it.deadlineEpochMillis }
+            if (urgentTask != null) {
+                val (taskNotice, isUrgent) = formatTodayTaskNotice(urgentTask)
+                Surface(
+                    shape = RoundedCornerShape(10.dp),
+                    color = if (isUrgent) MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.85f)
+                            else MaterialTheme.colorScheme.surfaceVariant,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .testTag("today_course_task_badge_${arrangement.id}"),
+                ) {
+                    Row(
+                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    ) {
+                        val iconText = when (urgentTask.type) {
+                            CourseTaskType.HOMEWORK -> "📝"
+                            CourseTaskType.EXAM -> "🚨"
+                            CourseTaskType.EXPERIMENT -> "🧪"
+                            CourseTaskType.CUSTOM -> "📌"
+                        }
+                        Text(text = iconText, fontSize = 12.sp)
+                        Text(
+                            text = taskNotice,
+                            style = MaterialTheme.typography.labelSmall,
+                            color = if (isUrgent) MaterialTheme.colorScheme.onErrorContainer
+                                    else MaterialTheme.colorScheme.onSurfaceVariant,
+                            fontWeight = FontWeight.SemiBold,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            modifier = Modifier.testTag("today_course_task_text_${arrangement.id}"),
+                        )
+                    }
+                }
+            }
         }
     }
+}
+
+private fun formatTodayTaskNotice(task: CourseTask): Pair<String, Boolean> {
+    val deadline = Instant.ofEpochMilli(task.deadlineEpochMillis).atZone(ZoneId.systemDefault()).toLocalDateTime()
+    val now = LocalDateTime.now()
+    val today = now.toLocalDate()
+    val deadlineDate = deadline.toLocalDate()
+    val daysDiff = ChronoUnit.DAYS.between(today, deadlineDate)
+    val isPast = deadline.isBefore(now)
+    val timeStr = deadline.format(DateTimeFormatter.ofPattern("HH:mm"))
+
+    val text = when {
+        isPast -> "${task.title} · 已逾期"
+        daysDiff == 0L -> "${task.title} · 今天 $timeStr 截止"
+        daysDiff == 1L -> "${task.title} · 明天截止"
+        daysDiff == 2L -> "${task.title} · 后天截止"
+        daysDiff in 3..7 -> "${task.title} · ${daysDiff}天后截止"
+        else -> "${task.title} · ${deadline.format(DateTimeFormatter.ofPattern("M月d日"))}截止"
+    }
+    return Pair(text, isPast || daysDiff <= 1L)
 }
 
 @Composable
