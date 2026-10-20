@@ -16,14 +16,12 @@ import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.isSystemInDarkTheme
-import androidx.compose.foundation.pager.HorizontalPager
-import androidx.compose.foundation.pager.PagerDefaults
-import androidx.compose.foundation.pager.PagerSnapDistance
-import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -76,8 +74,10 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
@@ -88,6 +88,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
+import com.example.mobileschedule.ui.schedule.wallpaper.ScheduleContrastHelper
+import com.example.mobileschedule.ui.schedule.wallpaper.ScheduleWallpaperManager
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
@@ -456,6 +458,26 @@ fun WeekScheduleGrid(
     }
 
     BoxWithConstraints(Modifier.fillMaxSize().testTag("week_grid")) {
+        val wallpaperBitmap = remember(displayOptions.wallpaperPath) {
+            displayOptions.wallpaperPath?.let { ScheduleWallpaperManager.loadWallpaperBitmap(it)?.asImageBitmap() }
+        }
+        if (wallpaperBitmap != null) {
+            Image(
+                bitmap = wallpaperBitmap,
+                contentDescription = null,
+                modifier = Modifier.fillMaxSize().testTag("schedule_wallpaper_image"),
+                contentScale = ContentScale.Crop,
+            )
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(
+                        if (displayOptions.isWallpaperDark) Color.Black.copy(alpha = 0.15f)
+                        else Color.White.copy(alpha = 0.12f)
+                    )
+            )
+        }
+
         val headerHeight = (44.dp * fontScale).coerceAtMost(78.dp)
         val availableBodyHeight = (maxHeight - headerHeight).coerceAtLeast(0.dp)
         val rowHeight = (availableBodyHeight / config.totalSections)
@@ -643,17 +665,23 @@ fun WeekScheduleGrid(
                             Modifier.height(rowHeight).fillMaxWidth().padding(top = 5.dp),
                             horizontalAlignment = Alignment.CenterHorizontally,
                         ) {
+                            val sectionNumColor = if (displayOptions.wallpaperPath != null) {
+                                if (displayOptions.isWallpaperDark) Color.White.copy(alpha = 0.92f) else Color.Black.copy(alpha = 0.85f)
+                            } else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.8f)
+                            val sectionTimeColor = if (displayOptions.wallpaperPath != null) {
+                                if (displayOptions.isWallpaperDark) Color.White.copy(alpha = 0.72f) else Color.Black.copy(alpha = 0.65f)
+                            } else MaterialTheme.colorScheme.outline
                             Text(
                                 "${index + 1}",
                                 fontWeight = FontWeight.SemiBold,
-                                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.8f),
+                                color = sectionNumColor,
                                 style = MaterialTheme.typography.labelMedium.copy(fontSize = 11.sp),
                             )
                             Text(
                                 interval?.let { "${it.start.format(timeFormat)}\n${it.end.format(timeFormat)}" } ?: "—",
                                 modifier = Modifier.testTag("section_time_${index + 1}"),
                                 textAlign = TextAlign.Center,
-                                color = MaterialTheme.colorScheme.outline,
+                                color = sectionTimeColor,
                                 style = MaterialTheme.typography.labelSmall.copy(fontSize = 9.sp, lineHeight = 11.sp),
                             )
                         }
@@ -814,6 +842,13 @@ private fun WeekHeaderRow(
             val dateLabel = if (compactHeader) "${dayItem.date.dayOfMonth}"
                 else "%02d-%02d".format(dayItem.date.monthValue, dayItem.date.dayOfMonth)
             val isToday = dayItem.date == today
+            val headerColor = if (isToday) {
+                MaterialTheme.colorScheme.onPrimaryContainer
+            } else if (displayOptions.wallpaperPath != null) {
+                if (displayOptions.isWallpaperDark) Color.White.copy(alpha = 0.92f) else Color.Black.copy(alpha = 0.85f)
+            } else {
+                MaterialTheme.colorScheme.onSurface
+            }
 
             Text(
                 "$label\n$dateLabel",
@@ -827,7 +862,7 @@ private fun WeekHeaderRow(
                 textAlign = TextAlign.Center,
                 maxLines = 2,
                 fontWeight = if (isToday) FontWeight.Bold else FontWeight.Medium,
-                color = if (isToday) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurface,
+                color = headerColor,
                 style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp, lineHeight = 12.sp),
             )
         }
@@ -868,7 +903,11 @@ private fun WeekScheduleContent(
     }
 
     Box(Modifier.width(gridWidth).height(gridHeight)) {
-        WeekGridLines(gridWidth, gridHeight, dayWidth, rowHeight, config.totalSections, columnCount, todayColumnIndex)
+        WeekGridLines(
+            gridWidth, gridHeight, dayWidth, rowHeight, config.totalSections, columnCount, todayColumnIndex,
+            hasWallpaper = displayOptions.wallpaperPath != null,
+            isWallpaperDark = displayOptions.isWallpaperDark,
+        )
         Box(Modifier.fillMaxSize()) {
             buildWeekGridSlots(coursesToDisplay, showWeekend = displayOptions.showWeekend, currentWeek = schedule.week).forEach { slot ->
                 val dayItem = displayedDays.firstOrNull { it.dayOfWeek == slot.dayOfWeek }
@@ -957,8 +996,14 @@ private fun WeekGridLines(
     sectionCount: Int,
     columnCount: Int,
     todayIndex: Int?,
+    hasWallpaper: Boolean = false,
+    isWallpaperDark: Boolean = false,
 ) {
-    val lineColor = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.45f)
+    val lineColor = if (hasWallpaper) {
+        if (isWallpaperDark) Color.White.copy(alpha = 0.20f) else Color.Black.copy(alpha = 0.14f)
+    } else {
+        MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.45f)
+    }
     val todayColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.24f)
     Canvas(Modifier.width(gridWidth).height(gridHeight)) {
         if (todayIndex != null) {
@@ -1040,6 +1085,29 @@ private fun WeekGridCard(
     val borderColor = if (isDark) Color(0xFF9CA3AF) else Color(0xFF6B7280)
     val cardAlpha = if (isInactive) 0.45f else 1.0f
 
+    val hasWallpaper = displayOptions.wallpaperPath != null
+    val targetOpacity = if (hasWallpaper) displayOptions.cardOpacity.coerceIn(0.30f, 1.00f) else 1.0f
+
+    val textContrast = ScheduleContrastHelper.resolveCardTextColors(
+        basePalette = palette,
+        cardOpacity = targetOpacity,
+        hasWallpaper = hasWallpaper,
+        isWallpaperDark = displayOptions.isWallpaperDark,
+    )
+
+    val cardContainerColor = palette.container.copy(
+        alpha = if (isInactive) (targetOpacity * 0.7f).coerceIn(0.2f, 1.0f) else targetOpacity
+    )
+
+    val glassBorderModifier = if (!isInactive && hasWallpaper && targetOpacity < 0.98f) {
+        val glassHighlight = if (displayOptions.isWallpaperDark) {
+            Color.White.copy(alpha = 0.28f)
+        } else {
+            Color.White.copy(alpha = 0.65f)
+        }
+        Modifier.border(0.6.dp, glassHighlight, RoundedCornerShape(8.dp))
+    } else Modifier
+
     val borderModifier = if (isInactive) {
         Modifier.drawWithContent {
             drawContent()
@@ -1067,12 +1135,13 @@ private fun WeekGridCard(
             .then(if (enableTag) Modifier.testTag(tag) else Modifier)
             .alpha(cardAlpha)
             .then(borderModifier)
+            .then(glassBorderModifier)
             .clickable(onClick = onClick)
             .semantics(mergeDescendants = true) { contentDescription = description },
         shape = RoundedCornerShape(8.dp),
         colors = CardDefaults.cardColors(
-            containerColor = palette.container,
-            contentColor = palette.onContainer,
+            containerColor = cardContainerColor,
+            contentColor = textContrast.title,
         ),
     ) {
         Box(Modifier.fillMaxSize()) {
@@ -1087,12 +1156,12 @@ private fun WeekGridCard(
                         maxLines = 2,
                         overflow = TextOverflow.Ellipsis,
                         fontWeight = FontWeight.Bold,
-                        color = palette.onContainer,
+                        color = textContrast.title,
                         style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp, lineHeight = 12.sp),
                     )
                     Text(
                         "点击查看",
-                        color = palette.secondaryText,
+                        color = textContrast.secondary,
                         style = MaterialTheme.typography.labelSmall.copy(fontSize = 9.sp),
                     )
                 } else {
@@ -1101,7 +1170,7 @@ private fun WeekGridCard(
                             "非本周",
                             maxLines = 1,
                             fontWeight = FontWeight.Bold,
-                            color = palette.secondaryText,
+                            color = textContrast.secondary,
                             style = MaterialTheme.typography.labelSmall.copy(fontSize = 8.sp, lineHeight = 10.sp),
                             modifier = Modifier.testTag("inactive_badge_${course.id}"),
                         )
@@ -1111,7 +1180,7 @@ private fun WeekGridCard(
                         maxLines = if (displayOptions.showFullCourseName) Int.MAX_VALUE else 3,
                         overflow = if (displayOptions.showFullCourseName) TextOverflow.Clip else TextOverflow.Ellipsis,
                         fontWeight = FontWeight.SemiBold,
-                        color = palette.onContainer,
+                        color = textContrast.title,
                         style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp, lineHeight = 12.sp),
                     )
                     if (displayOptions.showLocation) {
@@ -1119,7 +1188,7 @@ private fun WeekGridCard(
                             course.location ?: "地点未提供",
                             maxLines = 2,
                             overflow = TextOverflow.Ellipsis,
-                            color = palette.secondaryText,
+                            color = textContrast.secondary,
                             style = MaterialTheme.typography.labelSmall.copy(fontSize = 9.sp, lineHeight = 11.sp),
                         )
                     }
@@ -1128,7 +1197,7 @@ private fun WeekGridCard(
                             course.teacher ?: "教师未提供",
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis,
-                            color = palette.secondaryText,
+                            color = textContrast.secondary,
                             style = MaterialTheme.typography.labelSmall.copy(fontSize = 9.sp),
                         )
                     }
