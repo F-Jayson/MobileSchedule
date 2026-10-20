@@ -412,6 +412,7 @@ class OfflineScheduleRepository @Inject constructor(private val database: AppDat
 
     override suspend fun createTask(task: CourseTask): RepoResult<Long> = try {
         val id = tasks.insertTask(task.toEntity())
+        CourseReminderNotifier.notifyDataChanged()
         RepoResult.Ok(id)
     } catch (cancel: CancellationException) {
         throw cancel
@@ -421,7 +422,12 @@ class OfflineScheduleRepository @Inject constructor(private val database: AppDat
 
     override suspend fun updateTask(task: CourseTask): RepoResult<Unit> = try {
         val count = tasks.updateTask(task.toEntity())
-        if (count > 0) RepoResult.Ok(Unit) else RepoResult.Err(DataError(DataErrorCode.STORAGE_WRITE_FAILED))
+        if (count > 0) {
+            CourseReminderNotifier.notifyDataChanged()
+            RepoResult.Ok(Unit)
+        } else {
+            RepoResult.Err(DataError(DataErrorCode.STORAGE_WRITE_FAILED))
+        }
     } catch (cancel: CancellationException) {
         throw cancel
     } catch (_: Exception) {
@@ -430,7 +436,12 @@ class OfflineScheduleRepository @Inject constructor(private val database: AppDat
 
     override suspend fun updateTaskCompletion(taskId: Long, isCompleted: Boolean): RepoResult<Unit> = try {
         val count = tasks.updateTaskCompletion(taskId, isCompleted)
-        if (count > 0) RepoResult.Ok(Unit) else RepoResult.Err(DataError(DataErrorCode.STORAGE_WRITE_FAILED))
+        if (count > 0) {
+            CourseReminderNotifier.notifyDataChanged()
+            RepoResult.Ok(Unit)
+        } else {
+            RepoResult.Err(DataError(DataErrorCode.STORAGE_WRITE_FAILED))
+        }
     } catch (cancel: CancellationException) {
         throw cancel
     } catch (_: Exception) {
@@ -439,7 +450,12 @@ class OfflineScheduleRepository @Inject constructor(private val database: AppDat
 
     override suspend fun deleteTask(taskId: Long): RepoResult<Unit> = try {
         val count = tasks.deleteTaskById(taskId)
-        if (count > 0) RepoResult.Ok(Unit) else RepoResult.Err(DataError(DataErrorCode.STORAGE_WRITE_FAILED))
+        if (count > 0) {
+            CourseReminderNotifier.notifyDataChanged()
+            RepoResult.Ok(Unit)
+        } else {
+            RepoResult.Err(DataError(DataErrorCode.STORAGE_WRITE_FAILED))
+        }
     } catch (cancel: CancellationException) {
         throw cancel
     } catch (_: Exception) {

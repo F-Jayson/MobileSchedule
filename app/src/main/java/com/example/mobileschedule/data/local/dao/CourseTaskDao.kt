@@ -28,6 +28,14 @@ interface CourseTaskDao {
     @Query("""
         SELECT t.* FROM course_tasks AS t
         INNER JOIN courses AS c ON t.courseId = c.id
+        WHERE c.semesterId = :semesterId AND t.isCompleted = 0
+        ORDER BY t.deadlineEpochMillis ASC, t.id ASC
+    """)
+    suspend fun getUnfinishedTasksForSemester(semesterId: Long): List<CourseTaskEntity>
+
+    @Query("""
+        SELECT t.* FROM course_tasks AS t
+        INNER JOIN courses AS c ON t.courseId = c.id
         WHERE c.semesterId = :semesterId
         ORDER BY t.isCompleted ASC, t.deadlineEpochMillis ASC, t.id ASC
     """)

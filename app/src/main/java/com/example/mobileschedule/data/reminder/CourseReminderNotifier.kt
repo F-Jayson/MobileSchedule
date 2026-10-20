@@ -44,27 +44,42 @@ object CourseReminderNotifier {
      */
     suspend fun rescheduleFromDatabase(context: Context) {
         val prefs = AppPreferencesStore(context)
-        if (!prefs.isReminderEnabled()) {
-            CourseReminderScheduler.cancelAllReminders(context)
-            return
-        }
-
-        val advanceMinutes = prefs.getReminderAdvanceMinutes()
         val db = AppDatabase.getDatabase(context)
         try {
-            val activeId = db.semesterDao().getActiveSemesterId() ?: return
+            val activeId = db.semesterDao().getActiveSemesterId()
+            if (activeId == null) {
+                CourseReminderScheduler.cancelAllReminders(context)
+                CourseReminderScheduler.cancelAllTaskReminders(context)
+                return
+            }
+
             val semesterRow = db.semesterDao().getSemester(activeId) ?: return
             val semester = semesterRow.toModel()
-            val config = semester.config ?: return
+            val config = semester.config
             val courseRows = db.courseDao().getSemesterCourses(activeId)
             val arrangements = courseRows.map { it.toArrangement() }
+            val courseNameMap = courseRows.associate { it.course.id to it.course.name }
 
-            CourseReminderScheduler.scheduleReminders(
+            if (!prefs.isReminderEnabled() || config == null) {
+                CourseReminderScheduler.cancelAllReminders(context)
+            } else {
+                val advanceMinutes = prefs.getReminderAdvanceMinutes()
+                CourseReminderScheduler.scheduleReminders(
+                    context = context,
+                    config = config,
+                    arrangements = arrangements,
+                    semesterId = activeId,
+                    advanceMinutes = advanceMinutes,
+                )
+            }
+
+            // Schedule task reminders for active semester
+            val unfinishedEntities = db.courseTaskDao().getUnfinishedTasksForSemester(activeId)
+            val unfinishedTasks = unfinishedEntities.map { it.toModel() }
+            CourseReminderScheduler.scheduleTaskReminders(
                 context = context,
-                config = config,
-                arrangements = arrangements,
-                semesterId = activeId,
-                advanceMinutes = advanceMinutes,
+                tasks = unfinishedTasks,
+                courseNames = courseNameMap
             )
         } catch (_: Exception) {
             // Silently fail — alarms will be rescheduled on next data change
