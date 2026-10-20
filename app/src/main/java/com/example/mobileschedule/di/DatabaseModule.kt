@@ -25,4 +25,7 @@ object DatabaseModule {
 
     @Provides
     fun provideImportBatchDao(database: AppDatabase) = database.importBatchDao()
+
+    @Provides
+    fun provideCourseTaskDao(database: AppDatabase) = database.courseTaskDao()
 }

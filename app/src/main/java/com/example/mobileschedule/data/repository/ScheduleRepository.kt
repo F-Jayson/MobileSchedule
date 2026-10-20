@@ -15,6 +15,7 @@ import com.example.mobileschedule.data.model.SemesterConfig
 import com.example.mobileschedule.data.model.SemesterConfigDraft
 import com.example.mobileschedule.data.model.TodaySchedule
 import com.example.mobileschedule.data.model.WidgetScheduleData
+import com.example.mobileschedule.data.model.CourseTask
 import com.example.mobileschedule.data.model.WeekPosition
 import com.example.mobileschedule.data.model.WeekSchedule
 import java.time.LocalDate
@@ -52,6 +53,13 @@ interface ScheduleRepository {
     suspend fun checkArrangementConflict(
         semesterId: Long, draft: ArrangementDraft, excludingArrangementId: Long? = null,
     ): RepoResult<List<CourseArrangement>>
+
+    fun observeTasksForCourse(courseId: Long): Flow<RepoResult<List<CourseTask>>>
+    fun observeTasksForActiveSemester(unfinishedOnly: Boolean = false): Flow<RepoResult<List<CourseTask>>>
+    suspend fun createTask(task: CourseTask): RepoResult<Long>
+    suspend fun updateTask(task: CourseTask): RepoResult<Unit>
+    suspend fun updateTaskCompletion(taskId: Long, isCompleted: Boolean): RepoResult<Unit>
+    suspend fun deleteTask(taskId: Long): RepoResult<Unit>
 
     suspend fun prepareImport(request: ImportRequest): RepoResult<ImportPreview>
     suspend fun commitImport(previewId: String, confirmation: ImportConfirmation): RepoResult<ImportReceipt>

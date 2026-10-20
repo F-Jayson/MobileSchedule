@@ -253,5 +253,11 @@ class ScheduleViewModelTest {
         override suspend fun prepareImport(request: ImportRequest): RepoResult<ImportPreview> = error("unused")
         override suspend fun commitImport(previewId: String, confirmation: ImportConfirmation): RepoResult<ImportReceipt> = error("unused")
         override suspend fun discardImport(previewId: String): RepoResult<Unit> = error("unused")
+        override fun observeTasksForCourse(courseId: Long): Flow<RepoResult<List<com.example.mobileschedule.data.model.CourseTask>>> = flowOf(RepoResult.Ok(emptyList()))
+        override fun observeTasksForActiveSemester(unfinishedOnly: Boolean): Flow<RepoResult<List<com.example.mobileschedule.data.model.CourseTask>>> = flowOf(RepoResult.Ok(emptyList()))
+        override suspend fun createTask(task: com.example.mobileschedule.data.model.CourseTask): RepoResult<Long> = error("unused")
+        override suspend fun updateTask(task: com.example.mobileschedule.data.model.CourseTask): RepoResult<Unit> = error("unused")
+        override suspend fun updateTaskCompletion(taskId: Long, isCompleted: Boolean): RepoResult<Unit> = error("unused")
+        override suspend fun deleteTask(taskId: Long): RepoResult<Unit> = error("unused")
     }
 }

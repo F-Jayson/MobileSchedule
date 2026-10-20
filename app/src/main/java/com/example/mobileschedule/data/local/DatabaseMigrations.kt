@@ -84,4 +84,24 @@ object DatabaseMigrations {
             db.execSQL("UPDATE sqlite_sequence SET seq = MAX(seq, ?) WHERE name = 'courses'", arrayOf(previousSequence))
         }
     }
+
+    val MIGRATION_2_3 = object : Migration(2, 3) {
+        override fun migrate(db: SupportSQLiteDatabase) {
+            db.execSQL("""
+                CREATE TABLE IF NOT EXISTS course_tasks (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                    courseId INTEGER NOT NULL,
+                    title TEXT NOT NULL,
+                    content TEXT,
+                    deadlineEpochMillis INTEGER NOT NULL,
+                    type TEXT NOT NULL,
+                    isCompleted INTEGER NOT NULL,
+                    createdAt INTEGER NOT NULL,
+                    FOREIGN KEY(courseId) REFERENCES courses(id) ON UPDATE NO ACTION ON DELETE CASCADE
+                )
+            """.trimIndent())
+            db.execSQL("CREATE INDEX IF NOT EXISTS index_course_tasks_courseId ON course_tasks(courseId)")
+            db.execSQL("CREATE INDEX IF NOT EXISTS index_course_tasks_deadlineEpochMillis ON course_tasks(deadlineEpochMillis)")
+        }
+    }
 }

@@ -10,6 +10,8 @@ import com.example.mobileschedule.data.local.entity.SemesterConfigEntity
 import com.example.mobileschedule.data.local.entity.SemesterEntity
 import com.example.mobileschedule.data.local.entity.toArrangement
 import com.example.mobileschedule.data.local.entity.toModel
+import com.example.mobileschedule.data.local.entity.toEntity
+import com.example.mobileschedule.data.model.CourseTask
 import com.example.mobileschedule.data.model.ArrangementDraft
 import com.example.mobileschedule.data.model.CourseArrangement
 import com.example.mobileschedule.data.model.DataError
@@ -51,6 +53,7 @@ import kotlinx.coroutines.ExperimentalCoroutinesApi
 class OfflineScheduleRepository @Inject constructor(private val database: AppDatabase) : ScheduleRepository {
     private val semesters = database.semesterDao()
     private val courses = database.courseDao()
+    private val tasks = database.courseTaskDao()
     private val batches = database.importBatchDao()
     private val imports = ImportCoordinator(database)
 
@@ -387,6 +390,60 @@ class OfflineScheduleRepository @Inject constructor(private val database: AppDat
         throw cancel
     } catch (_: Exception) {
         RepoResult.Err(DataError(DataErrorCode.STORAGE_READ_FAILED))
+    }
+
+    override fun observeTasksForCourse(courseId: Long): Flow<RepoResult<List<CourseTask>>> =
+        tasks.observeTasksForCourse(courseId)
+            .map { list -> list.map { it.toModel() } }
+            .asResult()
+
+    @OptIn(ExperimentalCoroutinesApi::class)
+    override fun observeTasksForActiveSemester(unfinishedOnly: Boolean): Flow<RepoResult<List<CourseTask>>> =
+        semesters.observeActiveSemester().flatMapLatest { semesterWithDetails ->
+            val semesterId = semesterWithDetails?.semester?.id
+            if (semesterId == null) {
+                flowOf(emptyList())
+            } else if (unfinishedOnly) {
+                tasks.observeUnfinishedTasksForSemester(semesterId)
+            } else {
+                tasks.observeAllTasksForSemester(semesterId)
+            }
+        }.map { list -> list.map { it.toModel() } }.asResult()
+
+    override suspend fun createTask(task: CourseTask): RepoResult<Long> = try {
+        val id = tasks.insertTask(task.toEntity())
+        RepoResult.Ok(id)
+    } catch (cancel: CancellationException) {
+        throw cancel
+    } catch (_: Exception) {
+        RepoResult.Err(DataError(DataErrorCode.STORAGE_WRITE_FAILED))
+    }
+
+    override suspend fun updateTask(task: CourseTask): RepoResult<Unit> = try {
+        val count = tasks.updateTask(task.toEntity())
+        if (count > 0) RepoResult.Ok(Unit) else RepoResult.Err(DataError(DataErrorCode.STORAGE_WRITE_FAILED))
+    } catch (cancel: CancellationException) {
+        throw cancel
+    } catch (_: Exception) {
+        RepoResult.Err(DataError(DataErrorCode.STORAGE_WRITE_FAILED))
+    }
+
+    override suspend fun updateTaskCompletion(taskId: Long, isCompleted: Boolean): RepoResult<Unit> = try {
+        val count = tasks.updateTaskCompletion(taskId, isCompleted)
+        if (count > 0) RepoResult.Ok(Unit) else RepoResult.Err(DataError(DataErrorCode.STORAGE_WRITE_FAILED))
+    } catch (cancel: CancellationException) {
+        throw cancel
+    } catch (_: Exception) {
+        RepoResult.Err(DataError(DataErrorCode.STORAGE_WRITE_FAILED))
+    }
+
+    override suspend fun deleteTask(taskId: Long): RepoResult<Unit> = try {
+        val count = tasks.deleteTaskById(taskId)
+        if (count > 0) RepoResult.Ok(Unit) else RepoResult.Err(DataError(DataErrorCode.STORAGE_WRITE_FAILED))
+    } catch (cancel: CancellationException) {
+        throw cancel
+    } catch (_: Exception) {
+        RepoResult.Err(DataError(DataErrorCode.STORAGE_WRITE_FAILED))
     }
 
     private fun SemesterConfigDraft.toEntity(semesterId: Long, revision: Long) =
