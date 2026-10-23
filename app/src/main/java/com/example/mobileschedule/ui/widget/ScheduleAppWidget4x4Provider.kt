@@ -31,6 +31,7 @@ class ScheduleAppWidget4x4Provider : AppWidgetProvider() {
     override fun onEnabled(context: Context) {
         super.onEnabled(context)
         ScheduleWidgetWorker.enqueuePeriodicWork(context)
+        ScheduleAutoRefreshScheduler.scheduleNextRefresh(context)
         val pendingResult = goAsync()
         CoroutineScope(Dispatchers.IO).launch {
             try {

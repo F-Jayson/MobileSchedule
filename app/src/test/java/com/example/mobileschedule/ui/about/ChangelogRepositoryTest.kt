@@ -12,6 +12,7 @@ class ChangelogRepositoryTest {
         assertTrue("Bundled changelogs should have at least 3 historical releases", changelogs.size >= 3)
 
         val versions = changelogs.map { it.versionName }
+        assertTrue("Should include v1.5.1", versions.contains("1.5.1"))
         assertTrue("Should include v1.5.0", versions.contains("1.5.0"))
         assertTrue("Should include v1.2.0", versions.contains("1.2.0"))
         assertTrue("Should include v1.1.0", versions.contains("1.1.0"))
@@ -61,23 +62,23 @@ class ChangelogRepositoryTest {
     @Test
     fun testMergeWithRemoteUpdate_sameOrOlderVersion_returnsBundled() {
         val remoteInfoSame = AppUpdateInfo(
-            currentVersionName = "1.5.0",
-            latestVersionName = "1.5.0",
-            releaseTitle = "v1.5.0",
+            currentVersionName = "1.5.1",
+            latestVersionName = "1.5.1",
+            releaseTitle = "v1.5.1",
             releaseNotes = "无新更新",
             downloadUrl = null,
             browserUrl = "https://example.com",
             hasUpdate = false,
         )
 
-        val result = ChangelogRepository.mergeWithRemoteUpdate(remoteInfoSame, currentVersion = "1.5.0")
+        val result = ChangelogRepository.mergeWithRemoteUpdate(remoteInfoSame, currentVersion = "1.5.1")
         assertEquals(ChangelogRepository.bundledChangelogs, result)
     }
 
     @Test
     fun testMergeWithRemoteUpdate_newerVersion_prependsRemoteEntryWithBadge() {
         val remoteNew = AppUpdateInfo(
-            currentVersionName = "1.5.0",
+            currentVersionName = "1.5.1",
             latestVersionName = "1.6.0",
             releaseTitle = "全新日程流与同步",
             releaseNotes = "• 新增日程流同步\n• 提升加载性能",
@@ -88,7 +89,7 @@ class ChangelogRepositoryTest {
             publishedAt = "2026-10-20",
         )
 
-        val result = ChangelogRepository.mergeWithRemoteUpdate(remoteNew, currentVersion = "1.5.0")
+        val result = ChangelogRepository.mergeWithRemoteUpdate(remoteNew, currentVersion = "1.5.1")
         assertEquals(ChangelogRepository.bundledChangelogs.size + 1, result.size)
 
         val first = result.first()
@@ -101,9 +102,10 @@ class ChangelogRepositoryTest {
         assertTrue(first.highlights.contains("提升加载性能"))
 
         // Ensure bundled versions follow
-        assertEquals("1.5.0", result[1].versionName)
-        assertEquals("1.2.0", result[2].versionName)
-        assertEquals("1.1.0", result[3].versionName)
-        assertEquals("1.0.0", result[4].versionName)
+        assertEquals("1.5.1", result[1].versionName)
+        assertEquals("1.5.0", result[2].versionName)
+        assertEquals("1.2.0", result[3].versionName)
+        assertEquals("1.1.0", result[4].versionName)
+        assertEquals("1.0.0", result[5].versionName)
     }
 }

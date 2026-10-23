@@ -26,8 +26,11 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
 import java.time.LocalDate
+import java.time.LocalDateTime
 import java.time.LocalTime
+import java.time.ZoneId
 import java.time.temporal.ChronoUnit
+import com.example.mobileschedule.ui.widget.ScheduleAutoRefreshScheduler
 
 /**
  * Pure data model representing the display information of the ongoing capsule notification.
@@ -38,6 +41,8 @@ data class CapsuleNotificationData(
     val contentText: String,
     val subText: String? = null,
     val targetCourseId: Long? = null,
+    val chronometerTargetMillis: Long? = null,
+    val isCountDown: Boolean = true,
 )
 
 /**
@@ -82,6 +87,7 @@ object OngoingScheduleNotificationManager {
     fun deriveCapsuleNotificationData(
         schedule: TodaySchedule,
         now: LocalTime = LocalTime.now(),
+        today: LocalDate = LocalDate.now(),
     ): CapsuleNotificationData {
         if (schedule !is TodaySchedule.Ready) {
             return CapsuleNotificationData(
@@ -122,12 +128,18 @@ object OngoingScheduleNotificationManager {
                 "今日最后一节课"
             }
 
+            val targetMillis = currentCourse.endTime?.let { endTime ->
+                LocalDateTime.of(today, endTime).atZone(ZoneId.systemDefault()).toInstant().toEpochMilli()
+            }
+
             return CapsuleNotificationData(
                 shouldShow = true,
                 title = title,
                 contentText = contentText,
                 subText = "正在上课",
                 targetCourseId = currentCourse.arrangement.id,
+                chronometerTargetMillis = targetMillis,
+                isCountDown = true,
             )
         }
 
@@ -157,12 +169,18 @@ object OngoingScheduleNotificationManager {
                 }
             }
 
+            val targetMillis = nextCourse.startTime?.let { startTime ->
+                LocalDateTime.of(today, startTime).atZone(ZoneId.systemDefault()).toInstant().toEpochMilli()
+            }
+
             return CapsuleNotificationData(
                 shouldShow = true,
                 title = title,
                 contentText = contentText,
                 subText = "课表胶囊",
                 targetCourseId = nextCourse.arrangement.id,
+                chronometerTargetMillis = targetMillis,
+                isCountDown = true,
             )
         }
 
@@ -223,6 +241,18 @@ object OngoingScheduleNotificationManager {
             builder.setSubText(data.subText)
         }
 
+        if (data.chronometerTargetMillis != null && data.chronometerTargetMillis > System.currentTimeMillis()) {
+            builder.setWhen(data.chronometerTargetMillis)
+            builder.setShowWhen(true)
+            builder.setUsesChronometer(true)
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+                builder.setChronometerCountDown(data.isCountDown)
+            }
+        } else {
+            builder.setShowWhen(false)
+            builder.setUsesChronometer(false)
+        }
+
         notificationManager.notify(NOTIFICATION_ID, builder.build())
     }
 
@@ -241,6 +271,7 @@ object OngoingScheduleNotificationManager {
         scope.launch {
             try {
                 updateFromDatabase(context)
+                ScheduleAutoRefreshScheduler.scheduleNextRefresh(context)
             } catch (_: Exception) {
                 // Ignore transient errors
             }
@@ -278,7 +309,7 @@ object OngoingScheduleNotificationManager {
         val courses = db.courseDao().getSemesterCourses(activeId).map { it.toArrangement() }
 
         val todaySchedule = ScheduleRules.todaySchedule(semester, courses, today, now)
-        val capsuleData = deriveCapsuleNotificationData(todaySchedule, now)
+        val capsuleData = deriveCapsuleNotificationData(todaySchedule, now, today)
         updateNotification(context, capsuleData)
     }
 }

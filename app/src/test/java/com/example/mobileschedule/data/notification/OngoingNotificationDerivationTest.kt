@@ -13,7 +13,9 @@ import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.time.LocalDate
+import java.time.LocalDateTime
 import java.time.LocalTime
+import java.time.ZoneId
 
 class OngoingNotificationDerivationTest {
 
@@ -79,7 +81,7 @@ class OngoingNotificationDerivationTest {
         val now = LocalTime.of(7, 30) // 50 mins before 08:20
 
         val schedule = ScheduleRules.todaySchedule(semester, allCourses, today, now)
-        val data = OngoingScheduleNotificationManager.deriveCapsuleNotificationData(schedule, now)
+        val data = OngoingScheduleNotificationManager.deriveCapsuleNotificationData(schedule, now, today)
 
         assertTrue(data.shouldShow)
         assertEquals("下一节课（还有 50 分钟）：高等数学 - 知明1-101", data.title)
@@ -88,6 +90,9 @@ class OngoingNotificationDerivationTest {
         assertTrue(data.contentText.contains("张教授"))
         assertEquals("课表胶囊", data.subText)
         assertEquals(101L, data.targetCourseId)
+        val expectedStartMillis = LocalDateTime.of(today, LocalTime.of(8, 20)).atZone(ZoneId.systemDefault()).toInstant().toEpochMilli()
+        assertEquals(expectedStartMillis, data.chronometerTargetMillis)
+        assertTrue(data.isCountDown)
     }
 
     @Test
@@ -96,13 +101,16 @@ class OngoingNotificationDerivationTest {
         val now = LocalTime.of(9, 0) // During 08:20 - 10:00
 
         val schedule = ScheduleRules.todaySchedule(semester, allCourses, today, now)
-        val data = OngoingScheduleNotificationManager.deriveCapsuleNotificationData(schedule, now)
+        val data = OngoingScheduleNotificationManager.deriveCapsuleNotificationData(schedule, now, today)
 
         assertTrue(data.shouldShow)
         assertEquals("正在上课：高等数学 - 知明1-101", data.title)
         assertEquals("下节课：大学英语 - 知明2-202", data.contentText)
         assertEquals("正在上课", data.subText)
         assertEquals(101L, data.targetCourseId)
+        val expectedEndMillis = LocalDateTime.of(today, LocalTime.of(10, 0)).atZone(ZoneId.systemDefault()).toInstant().toEpochMilli()
+        assertEquals(expectedEndMillis, data.chronometerTargetMillis)
+        assertTrue(data.isCountDown)
     }
 
     @Test

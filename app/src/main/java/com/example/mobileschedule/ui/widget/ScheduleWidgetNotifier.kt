@@ -18,6 +18,7 @@ object ScheduleWidgetNotifier {
             ScheduleAppWidgetProvider.sendRefreshBroadcast(context)
             ScheduleAppWidget2x2Provider.sendRefreshBroadcast(context)
             ScheduleAppWidget4x4Provider.sendRefreshBroadcast(context)
+            ScheduleAutoRefreshScheduler.scheduleNextRefresh(context)
         }
     }
 }

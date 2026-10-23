@@ -115,7 +115,7 @@ object ScheduleWidgetUpdater {
         showAllCourses: Boolean = false,
     ): WidgetScheduleData = withContext(Dispatchers.IO) {
         try {
-            val database = AppDatabase.open(context)
+            val database = AppDatabase.getDatabase(context)
             val activeId = database.semesterDao().getActiveSemesterId()
             if (activeId != null) {
                 val semesterDetails = database.semesterDao().getSemester(activeId)
@@ -588,7 +588,7 @@ object ScheduleWidgetUpdater {
         today: LocalDate = LocalDate.now(),
     ): WidgetWeeklyScheduleData = withContext(Dispatchers.IO) {
         try {
-            val database = AppDatabase.open(context)
+            val database = AppDatabase.getDatabase(context)
             val activeId = database.semesterDao().getActiveSemesterId()
             if (activeId != null) {
                 val semesterDetails = database.semesterDao().getSemester(activeId)

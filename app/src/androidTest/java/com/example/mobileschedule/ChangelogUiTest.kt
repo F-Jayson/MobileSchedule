@@ -33,7 +33,7 @@ class ChangelogUiTest {
         val state = ChangelogUiState(
             entries = ChangelogRepository.bundledChangelogs,
             isChecking = false,
-            currentVersion = "1.5.0",
+            currentVersion = "1.5.1",
         )
 
         compose.setContent {
@@ -52,11 +52,11 @@ class ChangelogUiTest {
         compose.onNodeWithText("更新日志").assertIsDisplayed()
 
         // 2. Verify Bundled Versions
-        compose.onNodeWithTag("changelog_card_1.5.0").assertIsDisplayed()
-        compose.onNodeWithText("v1.5.0").assertIsDisplayed()
-        compose.onNodeWithText("大屏自适应、多规格小组件、壁纸定制与体验优化").assertIsDisplayed()
+        compose.onNodeWithTag("changelog_card_1.5.1").assertIsDisplayed()
+        compose.onNodeWithText("v1.5.1").assertIsDisplayed()
+        compose.onNodeWithText("课表背景壁纸功能全链路修复与体验优化").assertIsDisplayed()
 
-        // 3. Verify Current Version Badge on v1.5.0
+        // 3. Verify Current Version Badge on v1.5.1
         compose.onNodeWithTag("changelog_badge_current", useUnmergedTree = true).assertIsDisplayed()
         compose.onNodeWithText("当前版本", useUnmergedTree = true).assertIsDisplayed()
 
@@ -65,6 +65,7 @@ class ChangelogUiTest {
         compose.onNodeWithTag("changelog_update_button", useUnmergedTree = true).assertDoesNotExist()
 
         // 5. Verify Historical Versions exist in list
+        compose.onNodeWithTag("changelog_card_1.5.0").assertExists()
         compose.onNodeWithTag("changelog_card_1.2.0").assertExists()
         compose.onNodeWithTag("changelog_card_1.1.0").assertExists()
         compose.onNodeWithTag("changelog_card_1.0.0").assertExists()
@@ -86,7 +87,7 @@ class ChangelogUiTest {
     @Test
     fun testChangelogScreen_displaysRemoteNewVersion_showsBadgeAndTriggerUpdate() {
         val dummyRemoteInfo = AppUpdateInfo(
-            currentVersionName = "1.5.0",
+            currentVersionName = "1.5.1",
             latestVersionName = "1.6.0",
             releaseTitle = "v1.6.0 课表升级与日程云同步",
             releaseNotes = """
@@ -104,13 +105,13 @@ class ChangelogUiTest {
 
         val mergedEntries = ChangelogRepository.mergeWithRemoteUpdate(
             remoteInfo = dummyRemoteInfo,
-            currentVersion = "1.5.0",
+            currentVersion = "1.5.1",
         )
 
         val state = ChangelogUiState(
             entries = mergedEntries,
             isChecking = false,
-            currentVersion = "1.5.0",
+            currentVersion = "1.5.1",
         )
 
         var triggeredUpdateInfo: AppUpdateInfo? = null
@@ -159,7 +160,7 @@ class ChangelogUiTest {
         val state = ChangelogUiState(
             entries = ChangelogRepository.bundledChangelogs,
             isChecking = false,
-            currentVersion = "1.5.0",
+            currentVersion = "1.5.1",
         )
 
         compose.setContent {
