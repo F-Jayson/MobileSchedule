@@ -24,6 +24,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -38,6 +39,8 @@ import com.example.mobileschedule.data.model.WeekPosition
 internal fun ScheduleSemesterHeader(
     state: ScheduleUiState.Ready,
     showWeekend: Boolean = true,
+    hasWallpaper: Boolean = false,
+    isWallpaperDark: Boolean = false,
     onImport: () -> Unit = {},
     onAddCourse: () -> Unit = {},
     onExportImage: () -> Unit = {},
@@ -46,8 +49,17 @@ internal fun ScheduleSemesterHeader(
     Surface(
         modifier = Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 4.dp).testTag("schedule_semester_header"),
         shape = RoundedCornerShape(16.dp),
-        color = MaterialTheme.colorScheme.surfaceContainerLow,
-        tonalElevation = 1.dp,
+        color = if (hasWallpaper) {
+            if (isWallpaperDark) Color(0xFF1E293B).copy(alpha = 0.82f)
+            else MaterialTheme.colorScheme.surfaceContainerLow.copy(alpha = 0.85f)
+        } else MaterialTheme.colorScheme.surfaceContainerLow,
+        border = if (hasWallpaper) {
+            BorderStroke(
+                0.8.dp,
+                if (isWallpaperDark) Color.White.copy(alpha = 0.22f) else Color.White.copy(alpha = 0.65f)
+            )
+        } else null,
+        tonalElevation = if (hasWallpaper) 0.dp else 1.dp,
     ) {
         Column(Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 3.dp)) {
             Row(
@@ -133,6 +145,8 @@ internal fun ScheduleSemesterHeader(
 @Composable
 internal fun ScheduleWeekControls(
     state: ScheduleUiState.Ready,
+    hasWallpaper: Boolean = false,
+    isWallpaperDark: Boolean = false,
     onPreviousWeek: () -> Unit,
     onNextWeek: () -> Unit,
     onReturnToCurrentWeek: () -> Unit,
@@ -145,8 +159,17 @@ internal fun ScheduleWeekControls(
     Surface(
         modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 3.dp),
         shape = RoundedCornerShape(20.dp),
-        color = MaterialTheme.colorScheme.surfaceContainer,
-        tonalElevation = 2.dp,
+        color = if (hasWallpaper) {
+            if (isWallpaperDark) Color(0xFF1E293B).copy(alpha = 0.82f)
+            else MaterialTheme.colorScheme.surfaceContainer.copy(alpha = 0.85f)
+        } else MaterialTheme.colorScheme.surfaceContainer,
+        border = if (hasWallpaper) {
+            BorderStroke(
+                0.8.dp,
+                if (isWallpaperDark) Color.White.copy(alpha = 0.20f) else Color.White.copy(alpha = 0.60f)
+            )
+        } else null,
+        tonalElevation = if (hasWallpaper) 0.dp else 2.dp,
     ) {
         Row(
             Modifier.fillMaxWidth().padding(horizontal = 6.dp).testTag("week_switch_bar"),

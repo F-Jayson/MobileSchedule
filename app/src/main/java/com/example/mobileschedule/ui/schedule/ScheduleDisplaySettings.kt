@@ -46,7 +46,12 @@ import androidx.compose.ui.unit.dp
 import com.example.mobileschedule.data.preferences.AppPreferencesStore
 import com.example.mobileschedule.ui.schedule.wallpaper.ScheduleWallpaperManager
 import java.time.DayOfWeek
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import kotlin.math.roundToInt
 
 data class ScheduleDisplayOptions(
@@ -59,12 +64,22 @@ data class ScheduleDisplayOptions(
     val wallpaperPath: String? = null,
     val cardOpacity: Float = 0.85f,
     val isWallpaperDark: Boolean = false,
+    val wallpaperUpdatedAt: Long = 0L,
 )
 
 /** Presentation-only choices; imported courses and semester configuration remain in Room. */
 class ScheduleDisplaySettingsStore(context: Context, preferencesName: String = "schedule_display_settings") {
     private val preferences = context.applicationContext.getSharedPreferences(preferencesName, Context.MODE_PRIVATE)
     private val appPreferences = AppPreferencesStore(context)
+
+    companion object {
+        private val _optionsFlow = MutableStateFlow<ScheduleDisplayOptions?>(null)
+        val optionsFlow: StateFlow<ScheduleDisplayOptions?> = _optionsFlow.asStateFlow()
+
+        fun notifyOptionsChanged(options: ScheduleDisplayOptions) {
+            _optionsFlow.value = options
+        }
+    }
 
     fun read(): ScheduleDisplayOptions {
         val showWeekend = if (preferences.contains("show_weekend")) {
@@ -90,6 +105,11 @@ class ScheduleDisplaySettingsStore(context: Context, preferencesName: String = "
         }
         val cardOpacity = preferences.getFloat("schedule_card_opacity", 0.85f).coerceIn(0.30f, 1.00f)
         val isWallpaperDark = preferences.getBoolean("schedule_wallpaper_dark", false)
+        val wallpaperUpdatedAt = if (validWallpaperPath != null) {
+            preferences.getLong("schedule_wallpaper_updated_at", 0L)
+        } else {
+            0L
+        }
 
         return ScheduleDisplayOptions(
             showLocation = preferences.getBoolean("show_location", true),
@@ -101,6 +121,7 @@ class ScheduleDisplaySettingsStore(context: Context, preferencesName: String = "
             wallpaperPath = validWallpaperPath,
             cardOpacity = cardOpacity,
             isWallpaperDark = isWallpaperDark,
+            wallpaperUpdatedAt = wallpaperUpdatedAt,
         )
     }
 
@@ -117,15 +138,21 @@ class ScheduleDisplaySettingsStore(context: Context, preferencesName: String = "
 
         if (options.wallpaperPath != null) {
             editor.putString("schedule_wallpaper_path", options.wallpaperPath)
+            editor.putLong("schedule_wallpaper_updated_at", options.wallpaperUpdatedAt)
         } else {
             editor.remove("schedule_wallpaper_path")
+            editor.remove("schedule_wallpaper_updated_at")
         }
 
         val ok1 = editor.commit()
         val ok2 = appPreferences.saveShowWeekend(options.showWeekend)
         val ok3 = appPreferences.saveFirstDayOfWeek(options.firstDayOfWeek)
         val ok4 = appPreferences.saveShowNonCurrentWeekCourses(options.showNonCurrentWeekCourses)
-        return ok1 && ok2 && ok3 && ok4
+        val success = ok1 && ok2 && ok3 && ok4
+        if (success) {
+            notifyOptionsChanged(options)
+        }
+        return success
     }
 }
 
@@ -165,20 +192,35 @@ fun ScheduleDisplaySettingsScreen(
     val coroutineScope = rememberCoroutineScope()
     val scrollState = rememberScrollState()
     var showFirstDayDialog by remember { mutableStateOf(false) }
+    var isProcessingWallpaper by remember { mutableStateOf(false) }
 
     val pickMediaLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.PickVisualMedia()
     ) { uri ->
         if (uri != null) {
-            coroutineScope.launch {
+            isProcessingWallpaper = true
+            coroutineScope.launch(Dispatchers.IO) {
                 val metadata = ScheduleWallpaperManager.saveWallpaperFromUri(context, uri)
-                if (metadata != null) {
-                    onOptionsChange(
-                        options.copy(
-                            wallpaperPath = metadata.filePath,
-                            isWallpaperDark = metadata.isDark,
+                withContext(Dispatchers.Main) {
+                    isProcessingWallpaper = false
+                    if (metadata != null) {
+                        val nextOpacity = if (options.wallpaperPath == null && options.cardOpacity >= 0.85f) {
+                            0.65f
+                        } else {
+                            options.cardOpacity
+                        }
+                        onOptionsChange(
+                            options.copy(
+                                wallpaperPath = metadata.filePath,
+                                isWallpaperDark = metadata.isDark,
+                                cardOpacity = nextOpacity,
+                                wallpaperUpdatedAt = metadata.updatedAt,
+                            )
                         )
-                    )
+                        android.widget.Toast.makeText(context, "课表背景壁纸已设置", android.widget.Toast.LENGTH_SHORT).show()
+                    } else {
+                        android.widget.Toast.makeText(context, "壁纸设置失败，请选择其他图片重试", android.widget.Toast.LENGTH_SHORT).show()
+                    }
                 }
             }
         }
@@ -395,20 +437,35 @@ fun ScheduleDisplaySettingsScreen(
                     ) {
                         OutlinedButton(
                             onClick = {
-                                pickMediaLauncher.launch(
-                                    PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)
-                                )
+                                if (!isProcessingWallpaper) {
+                                    pickMediaLauncher.launch(
+                                        PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)
+                                    )
+                                }
                             },
+                            enabled = !isProcessingWallpaper,
                             modifier = Modifier.weight(1f).testTag("display_pick_wallpaper_button"),
                         ) {
-                            Text(if (options.wallpaperPath == null) "选择背景壁纸" else "更换壁纸")
+                            Text(
+                                if (isProcessingWallpaper) "处理中…"
+                                else if (options.wallpaperPath == null) "选择背景壁纸"
+                                else "更换壁纸"
+                            )
                         }
                         if (options.wallpaperPath != null) {
                             OutlinedButton(
                                 onClick = {
                                     ScheduleWallpaperManager.clearWallpaper(context)
-                                    onOptionsChange(options.copy(wallpaperPath = null, isWallpaperDark = false))
+                                    onOptionsChange(
+                                        options.copy(
+                                            wallpaperPath = null,
+                                            isWallpaperDark = false,
+                                            wallpaperUpdatedAt = 0L,
+                                        )
+                                    )
+                                    android.widget.Toast.makeText(context, "已恢复默认无壁纸", android.widget.Toast.LENGTH_SHORT).show()
                                 },
+                                enabled = !isProcessingWallpaper,
                                 modifier = Modifier.weight(1f).testTag("display_clear_wallpaper_button"),
                             ) {
                                 Text("恢复默认无壁纸")

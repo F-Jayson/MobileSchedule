@@ -182,7 +182,13 @@ fun ScheduleRoute(
 ) {
     val context = LocalContext.current
     val displayStore = remember(context) { ScheduleDisplaySettingsStore(context) }
+    val reactiveOptions by ScheduleDisplaySettingsStore.optionsFlow.collectAsStateWithLifecycle()
     var displayOptions by remember(displayStore) { mutableStateOf(displayStore.read()) }
+    LaunchedEffect(reactiveOptions) {
+        reactiveOptions?.let {
+            displayOptions = it
+        }
+    }
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     val detailState by viewModel.detailState.collectAsStateWithLifecycle()
     val formState by viewModel.formState.collectAsStateWithLifecycle()
@@ -317,6 +323,8 @@ fun ScheduleScreen(
                         ScheduleSemesterHeader(
                             state = state,
                             showWeekend = displayOptions.showWeekend,
+                            hasWallpaper = displayOptions.wallpaperPath != null,
+                            isWallpaperDark = displayOptions.isWallpaperDark,
                             onImport = onImport,
                             onAddCourse = onAddCourse,
                             onExportImage = { showExportSheet = true },
@@ -330,7 +338,14 @@ fun ScheduleScreen(
                                 onPreviousWeek = onPreviousWeek, onNextWeek = onNextWeek,
                             )
                         }
-                        ScheduleWeekControls(state, onPreviousWeek, onNextWeek, onReturnToCurrentWeek)
+                        ScheduleWeekControls(
+                            state = state,
+                            hasWallpaper = displayOptions.wallpaperPath != null,
+                            isWallpaperDark = displayOptions.isWallpaperDark,
+                            onPreviousWeek = onPreviousWeek,
+                            onNextWeek = onNextWeek,
+                            onReturnToCurrentWeek = onReturnToCurrentWeek,
+                        )
                     }
                 }
             }
@@ -479,7 +494,7 @@ fun WeekScheduleGrid(
     }
 
     BoxWithConstraints(Modifier.fillMaxSize().testTag("week_grid")) {
-        val wallpaperBitmap = remember(displayOptions.wallpaperPath) {
+        val wallpaperBitmap = remember(displayOptions.wallpaperPath, displayOptions.wallpaperUpdatedAt) {
             displayOptions.wallpaperPath?.let { ScheduleWallpaperManager.loadWallpaperBitmap(it)?.asImageBitmap() }
         }
         if (wallpaperBitmap != null) {
